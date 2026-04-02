@@ -40,8 +40,13 @@ export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
       }
     });
 
-    if (extracted.status === "success" && extracted.output?.leads?.length > 0) {
-      const leadsToCreate = extracted.output.leads.map(l => ({
+    // Handle both array output and object with leads key
+    const rawLeads = Array.isArray(extracted.output)
+      ? extracted.output
+      : extracted.output?.leads;
+
+    if (extracted.status === "success" && rawLeads?.length > 0) {
+      const leadsToCreate = rawLeads.map(l => ({
         ...l,
         source: "CSV Upload",
         status: "New",
