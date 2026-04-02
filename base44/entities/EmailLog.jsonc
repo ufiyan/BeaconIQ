@@ -1,0 +1,63 @@
+{
+  "name": "EmailLog",
+  "type": "object",
+  "properties": {
+    "lead_id": {
+      "type": "string",
+      "title": "Lead ID"
+    },
+    "lead_name": {
+      "type": "string",
+      "title": "Lead Name"
+    },
+    "lead_email": {
+      "type": "string",
+      "title": "Lead Email"
+    },
+    "campaign_id": {
+      "type": "string",
+      "title": "Campaign ID"
+    },
+    "subject": {
+      "type": "string",
+      "title": "Subject"
+    },
+    "body": {
+      "type": "string",
+      "title": "Email Body"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Draft",
+        "Sent",
+        "Delivered",
+        "Opened",
+        "Replied",
+        "Bounced",
+        "Failed"
+      ],
+      "default": "Draft"
+    },
+    "step_number": {
+      "type": "number",
+      "title": "Step Number"
+    },
+    "sent_at": {
+      "type": "string",
+      "title": "Sent At",
+      "format": "date-time"
+    },
+    "ai_generated": {
+      "type": "boolean",
+      "title": "AI Generated",
+      "default": true
+    }
+  },
+  "required": [
+    "lead_id",
+    "subject",
+    "body"
+  ]
+}

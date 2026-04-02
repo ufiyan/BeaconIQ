@@ -1,0 +1,69 @@
+{
+  "name": "Campaign",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Campaign Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "Draft",
+        "Active",
+        "Paused",
+        "Completed"
+      ],
+      "default": "Draft"
+    },
+    "steps": {
+      "type": "array",
+      "title": "Follow-up Steps",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "number",
+            "title": "Day"
+          },
+          "subject_template": {
+            "type": "string",
+            "title": "Subject Template"
+          },
+          "message_template": {
+            "type": "string",
+            "title": "Message Template"
+          }
+        }
+      }
+    },
+    "total_leads": {
+      "type": "number",
+      "title": "Total Leads",
+      "default": 0
+    },
+    "total_sent": {
+      "type": "number",
+      "title": "Total Sent",
+      "default": 0
+    },
+    "total_replied": {
+      "type": "number",
+      "title": "Total Replied",
+      "default": 0
+    },
+    "total_opened": {
+      "type": "number",
+      "title": "Total Opened",
+      "default": 0
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

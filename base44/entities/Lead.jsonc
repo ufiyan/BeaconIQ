@@ -1,0 +1,97 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Full Name"
+    },
+    "email": {
+      "type": "string",
+      "title": "Email"
+    },
+    "company": {
+      "type": "string",
+      "title": "Company"
+    },
+    "title": {
+      "type": "string",
+      "title": "Job Title"
+    },
+    "phone": {
+      "type": "string",
+      "title": "Phone"
+    },
+    "source": {
+      "type": "string",
+      "title": "Source",
+      "enum": [
+        "CSV Upload",
+        "Manual Entry",
+        "Website",
+        "Referral",
+        "Other"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "New",
+        "Contacted",
+        "Replied",
+        "Interested",
+        "Meeting Booked",
+        "Closed",
+        "Unresponsive",
+        "Opted Out"
+      ],
+      "default": "New"
+    },
+    "priority": {
+      "type": "string",
+      "title": "Priority",
+      "enum": [
+        "High",
+        "Medium",
+        "Low"
+      ],
+      "default": "Medium"
+    },
+    "campaign_id": {
+      "type": "string",
+      "title": "Campaign ID"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    },
+    "last_contacted": {
+      "type": "string",
+      "title": "Last Contacted",
+      "format": "date-time"
+    },
+    "next_followup": {
+      "type": "string",
+      "title": "Next Follow-up",
+      "format": "date-time"
+    },
+    "total_emails_sent": {
+      "type": "number",
+      "title": "Total Emails Sent",
+      "default": 0
+    },
+    "linkedin_url": {
+      "type": "string",
+      "title": "LinkedIn URL"
+    },
+    "industry": {
+      "type": "string",
+      "title": "Industry"
+    }
+  },
+  "required": [
+    "name",
+    "email"
+  ]
+}

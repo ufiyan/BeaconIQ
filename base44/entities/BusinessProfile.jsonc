@@ -1,0 +1,75 @@
+{
+  "name": "BusinessProfile",
+  "type": "object",
+  "properties": {
+    "business_name": {
+      "type": "string",
+      "title": "Business Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Business Description"
+    },
+    "industry": {
+      "type": "string",
+      "title": "Industry",
+      "enum": [
+        "Marketing Agency",
+        "Lead Generation",
+        "SaaS",
+        "Consulting",
+        "E-commerce",
+        "Real Estate",
+        "Financial Services",
+        "Other"
+      ]
+    },
+    "target_audience": {
+      "type": "string",
+      "title": "Target Audience"
+    },
+    "products_services": {
+      "type": "string",
+      "title": "Products/Services"
+    },
+    "tone": {
+      "type": "string",
+      "title": "Communication Tone",
+      "enum": [
+        "Professional",
+        "Friendly",
+        "Casual",
+        "Formal",
+        "Persuasive"
+      ]
+    },
+    "sales_goal": {
+      "type": "string",
+      "title": "Primary Sales Goal",
+      "enum": [
+        "Book a Meeting",
+        "Schedule a Demo",
+        "Close a Deal",
+        "Get a Response",
+        "Drive Traffic"
+      ]
+    },
+    "website": {
+      "type": "string",
+      "title": "Website URL"
+    },
+    "onboarding_complete": {
+      "type": "boolean",
+      "title": "Onboarding Complete",
+      "default": false
+    }
+  },
+  "required": [
+    "business_name",
+    "description",
+    "industry",
+    "target_audience",
+    "tone",
+    "sales_goal"
+  ]
+}
