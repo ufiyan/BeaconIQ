@@ -13,9 +13,9 @@ export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
   const handleImport = async () => {
     if (!file) return;
     setImporting(true);
-    
+
     const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    
+
     const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
       file_url,
       json_schema: {
@@ -32,8 +32,7 @@ export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
                 title: { type: "string" },
                 phone: { type: "string" },
                 industry: { type: "string" }
-              },
-              required: ["name", "email"]
+              }
             }
           }
         }
@@ -46,20 +45,41 @@ export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
       : extracted.output?.leads;
 
     if (extracted.status === "success" && rawLeads?.length > 0) {
-      const leadsToCreate = rawLeads.map(l => ({
-        ...l,
-        source: "CSV Upload",
-        status: "New",
-        priority: "Medium"
-      }));
-      await base44.entities.Lead.bulkCreate(leadsToCreate);
-      setResult({ count: leadsToCreate.length });
-      toast({ title: `${leadsToCreate.length} leads imported successfully` });
-      onSuccess();
+      // Normalize common CSV header variations
+      const normalize = (lead) => {
+        const name = lead.name || lead.full_name || lead.fullname || lead.contact_name ||
+          (`${lead.first_name || ""} ${lead.last_name || ""}`.trim()) || null;
+        const email = lead.email || lead.email_address || lead.emailaddress || lead.e_mail || null;
+        return { ...lead, name, email };
+      };
+
+      const leadsToCreate = rawLeads
+        .map(normalize)
+        .filter(l => l.name && l.email)
+        .map(l => ({
+          name: l.name,
+          email: l.email,
+          company: l.company || "",
+          title: l.title || "",
+          phone: l.phone || "",
+          industry: l.industry || "",
+          source: "CSV Upload",
+          status: "New",
+          priority: "Medium"
+        }));
+
+      if (leadsToCreate.length === 0) {
+        toast({ title: "Import failed", description: "No valid leads found — make sure your CSV has 'name' and 'email' columns", variant: "destructive" });
+      } else {
+        await base44.entities.Lead.bulkCreate(leadsToCreate);
+        setResult({ count: leadsToCreate.length });
+        toast({ title: `${leadsToCreate.length} leads imported successfully` });
+        onSuccess();
+      }
     } else {
-      toast({ title: "Import failed", description: "Could not extract leads from the file", variant: "destructive" });
+      toast({ title: "Import failed", description: "Could not read the file. Please check format and try again.", variant: "destructive" });
     }
-    
+
     setImporting(false);
   };
 
@@ -76,7 +96,7 @@ export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
           <DialogTitle>Import Leads from CSV</DialogTitle>
           <DialogDescription>Upload a CSV file with columns: name, email, company, title, phone</DialogDescription>
         </DialogHeader>
-        
+
         {result ? (
           <div className="flex flex-col items-center py-8">
             <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
