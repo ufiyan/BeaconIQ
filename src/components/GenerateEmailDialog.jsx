@@ -63,7 +63,11 @@ Output JSON with "subject" and "body" fields.`,
     if (!subject || !body) return;
     setSending(true);
 
-    // Note: SendEmail only works for in-app users. Log the email as sent for external leads.
+    // Open pre-filled Gmail compose window
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+
+    // Log the email in the app
     await base44.entities.EmailLog.create({
       lead_id: lead.id,
       lead_name: lead.name,
@@ -81,7 +85,7 @@ Output JSON with "subject" and "body" fields.`,
       total_emails_sent: (lead.total_emails_sent || 0) + 1
     });
 
-    toast({ title: "Email sent successfully!" });
+    toast({ title: "Gmail opened! Email logged in app." });
     setSending(false);
     setSubject("");
     setBody("");
