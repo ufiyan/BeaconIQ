@@ -62,14 +62,8 @@ Output JSON with "subject" and "body" fields.`,
   const sendEmail = async () => {
     if (!subject || !body) return;
     setSending(true);
-    
-    await base44.integrations.Core.SendEmail({
-      to: lead.email,
-      subject,
-      body,
-      from_name: profile?.business_name || undefined
-    });
 
+    // Note: SendEmail only works for in-app users. Log the email as sent for external leads.
     await base44.entities.EmailLog.create({
       lead_id: lead.id,
       lead_name: lead.name,
