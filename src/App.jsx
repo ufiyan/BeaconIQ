@@ -13,6 +13,7 @@ import Campaigns from './pages/Campaigns';
 import EmailLog from './pages/EmailLog';
 import Settings from './pages/Settings';
 import Onboarding from './pages/Onboarding';
+import EmailIngestion from './pages/EmailIngestion';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -48,6 +49,7 @@ const AuthenticatedApp = () => {
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/emails" element={<EmailLog />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/email-ingestion" element={<EmailIngestion />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut,
-  TrendingUp
+  TrendingUp, Inbox
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
@@ -10,6 +10,7 @@ const navItems = [
   { label: "Leads", icon: Users, path: "/leads" },
   { label: "Campaigns", icon: Zap, path: "/campaigns" },
   { label: "Email Log", icon: Mail, path: "/emails" },
+  { label: "Email Ingestion", icon: Inbox, path: "/email-ingestion" },
   { label: "Settings", icon: Settings, path: "/settings" },
 ];
 

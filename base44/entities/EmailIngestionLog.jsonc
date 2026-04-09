@@ -1,0 +1,44 @@
+{
+  "name": "EmailIngestionLog",
+  "type": "object",
+  "properties": {
+    "sender_name": {
+      "type": "string",
+      "title": "Sender Name"
+    },
+    "sender_email": {
+      "type": "string",
+      "title": "Sender Email"
+    },
+    "subject": {
+      "type": "string",
+      "title": "Subject"
+    },
+    "result": {
+      "type": "string",
+      "title": "Result",
+      "enum": [
+        "lead_created",
+        "lead_updated",
+        "skipped"
+      ],
+      "default": "skipped"
+    },
+    "ai_summary": {
+      "type": "string",
+      "title": "AI Summary"
+    },
+    "confidence_score": {
+      "type": "number",
+      "title": "Confidence Score"
+    },
+    "lead_id": {
+      "type": "string",
+      "title": "Lead ID"
+    }
+  },
+  "required": [
+    "sender_email",
+    "result"
+  ]
+}
