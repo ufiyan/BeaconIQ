@@ -1,0 +1,60 @@
+{
+  "name": "FollowUpReminder",
+  "type": "object",
+  "properties": {
+    "lead_id": {
+      "type": "string",
+      "title": "Lead ID"
+    },
+    "lead_name": {
+      "type": "string",
+      "title": "Lead Name"
+    },
+    "lead_company": {
+      "type": "string",
+      "title": "Lead Company"
+    },
+    "due_date": {
+      "type": "string",
+      "title": "Due Date",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "pending",
+        "dismissed",
+        "completed",
+        "snoozed"
+      ],
+      "default": "pending"
+    },
+    "reminder_type": {
+      "type": "string",
+      "title": "Reminder Type",
+      "enum": [
+        "no_contact",
+        "no_reply",
+        "stale_interested"
+      ]
+    },
+    "days_since_contact": {
+      "type": "number",
+      "title": "Days Since Last Contact"
+    },
+    "snooze_until": {
+      "type": "string",
+      "title": "Snooze Until",
+      "format": "date-time"
+    },
+    "dismiss_reason": {
+      "type": "string",
+      "title": "Dismiss Reason"
+    }
+  },
+  "required": [
+    "lead_id",
+    "reminder_type"
+  ]
+}

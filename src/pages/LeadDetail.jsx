@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import IntentScoreCard from "../components/IntentScoreCard";
-import { ArrowLeft, Mail, Phone, Building, Briefcase, Trash2, Sparkles, Send, Globe } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building, Briefcase, Trash2, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,16 +19,19 @@ export default function LeadDetail() {
   const [intentScore, setIntentScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [activeReminder, setActiveReminder] = useState(null);
 
   const loadData = async () => {
-    const [leads, allEmails, scores] = await Promise.all([
+    const [leads, allEmails, scores, reminders] = await Promise.all([
       base44.entities.Lead.filter({ id }),
       base44.entities.EmailLog.filter({ lead_id: id }, "-created_date", 50),
       base44.entities.IntentScore.filter({ lead_id: id }, "-scored_at", 1),
+      base44.entities.FollowUpReminder.filter({ lead_id: id, status: "pending" }, "-created_date", 1).catch(() => []),
     ]);
     setLead(leads[0]);
-    setEmails(allEmails);
+    setEmails(allEmails.filter(e => e.status !== "Cancelled"));
     setIntentScore(scores[0] || null);
+    setActiveReminder(reminders[0] || null);
     setLoading(false);
   };
 
@@ -69,6 +72,33 @@ export default function LeadDetail() {
       <Link to="/leads" className="inline-flex items-center gap-2 text-xs mb-6 transition-colors" style={{ color: '#94A3B8' }}>
         <ArrowLeft className="h-4 w-4" /> Back to Leads
       </Link>
+
+      {/* Reminder banner */}
+      {activeReminder && (
+        <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-4 flex-wrap" style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }}>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: "#F59E0B" }} />
+            <p className="text-sm" style={{ color: "#F59E0B" }}>
+              This lead hasn't been contacted in {activeReminder.days_since_contact} days.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowGenerate(true); }}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium"
+              style={{ background: "#F59E0B", color: "#000" }}
+            >Generate follow-up?</button>
+            <button
+              onClick={async () => {
+                await base44.entities.FollowUpReminder.update(activeReminder.id, { status: "dismissed", dismiss_reason: "manually dismissed" });
+                setActiveReminder(null);
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg"
+              style={{ color: "#94A3B8", background: "rgba(148,163,184,0.1)" }}
+            >Dismiss</button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="rounded-xl p-6 mb-6" style={{ background: 'hsl(var(--card))', border: '0.5px solid hsl(var(--border))' }}>

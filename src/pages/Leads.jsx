@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Link } from "react-router-dom";
-import { Users, Plus, Upload, Search } from "lucide-react";
+import { Users, Plus, Upload, Search, Clock } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
@@ -39,15 +39,19 @@ export default function Leads() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
+  const [reminderLeadIds, setReminderLeadIds] = useState(new Set());
+
   const loadLeads = async () => {
-    const [data, scores] = await Promise.all([
+    const [data, scores, reminders] = await Promise.all([
       base44.entities.Lead.list("-created_date", 200),
       base44.entities.IntentScore.list("-scored_at", 500),
+      base44.entities.FollowUpReminder.filter({ status: "pending" }, "-created_date", 500).catch(() => []),
     ]);
     setLeads(data);
     const scoreMap = {};
     for (const s of scores) { scoreMap[s.lead_id] = s.intent_score; }
     setIntentScores(scoreMap);
+    setReminderLeadIds(new Set(reminders.map(r => r.lead_id)));
     setLoading(false);
   };
 
@@ -137,6 +141,9 @@ export default function Leads() {
                             {initials(lead.name)}
                           </div>
                           <span className="text-xs font-medium text-white hover:underline">{lead.name}</span>
+                          {reminderLeadIds.has(lead.id) && (
+                            <Clock className="h-3 w-3 flex-shrink-0" style={{ color: "#F59E0B" }} title="Follow-up due" />
+                          )}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-xs" style={{ color: "#94A3B8" }}>{lead.company || "—"}</td>

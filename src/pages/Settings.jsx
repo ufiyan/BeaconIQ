@@ -26,6 +26,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const [activeTab, setActiveTab] = useState(urlParams.get('tab') || 'profile');
+  const [followupForm, setFollowupForm] = useState({ followup_enabled: true, no_contact_days: 3, no_reply_days: 5, stale_interested_days: 7 });
+  const [savingFollowup, setSavingFollowup] = useState(false);
 
   useEffect(() => {
     base44.entities.BusinessProfile.list("-created_date", 1).then(data => {
@@ -40,6 +42,12 @@ export default function Settings() {
           tone: data[0].tone || "",
           sales_goal: data[0].sales_goal || "",
           website: data[0].website || "",
+        });
+        setFollowupForm({
+          followup_enabled: data[0].followup_enabled !== false,
+          no_contact_days: data[0].no_contact_days ?? 3,
+          no_reply_days: data[0].no_reply_days ?? 5,
+          stale_interested_days: data[0].stale_interested_days ?? 7,
         });
       }
       setLoading(false);
@@ -72,7 +80,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-border">
-        {[['profile','Business Profile'],['ingestion','Email Ingestion']].map(([id, label]) => (
+        {[['profile','Business Profile'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders']].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -176,6 +184,62 @@ export default function Settings() {
       )}
 
       {activeTab === 'ingestion' && <EmailIngestionTab />}
+
+      {activeTab === 'followup' && (
+        <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Enable follow-up reminders</p>
+              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Automatically remind you when leads go cold</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={followupForm.followup_enabled}
+              onChange={e => setFollowupForm({ ...followupForm, followup_enabled: e.target.checked })}
+              className="h-4 w-4 accent-blue-500"
+            />
+          </div>
+          {followupForm.followup_enabled && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <Label>No-contact threshold (days)</Label>
+                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.no_contact_days}
+                    onChange={e => setFollowupForm({ ...followupForm, no_contact_days: parseInt(e.target.value) || 3 })} />
+                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Lead in "New" with no email sent</p>
+                </div>
+                <div>
+                  <Label>No-reply threshold (days)</Label>
+                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.no_reply_days}
+                    onChange={e => setFollowupForm({ ...followupForm, no_reply_days: parseInt(e.target.value) || 5 })} />
+                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Email sent but lead still "Contacted"</p>
+                </div>
+                <div>
+                  <Label>Stale interested threshold (days)</Label>
+                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.stale_interested_days}
+                    onChange={e => setFollowupForm({ ...followupForm, stale_interested_days: parseInt(e.target.value) || 7 })} />
+                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Lead is "Interested" with no activity</p>
+                </div>
+              </div>
+            </>
+          )}
+          <Button
+            onClick={async () => {
+              setSavingFollowup(true);
+              if (profile) {
+                await base44.entities.BusinessProfile.update(profile.id, followupForm);
+              }
+              toast({ title: "Follow-up settings saved!" });
+              setSavingFollowup(false);
+            }}
+            disabled={savingFollowup}
+            className="gap-2"
+          >
+            {savingFollowup && <Loader2 className="h-4 w-4 animate-spin" />}
+            {savingFollowup ? "Saving..." : "Save Settings"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

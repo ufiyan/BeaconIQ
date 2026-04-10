@@ -62,6 +62,26 @@
       "type": "boolean",
       "title": "Onboarding Complete",
       "default": false
+    },
+    "followup_enabled": {
+      "type": "boolean",
+      "title": "Follow-up Reminders Enabled",
+      "default": true
+    },
+    "no_contact_days": {
+      "type": "number",
+      "title": "No-Contact Threshold (days)",
+      "default": 3
+    },
+    "no_reply_days": {
+      "type": "number",
+      "title": "No-Reply Threshold (days)",
+      "default": 5
+    },
+    "stale_interested_days": {
+      "type": "number",
+      "title": "Stale Interested Threshold (days)",
+      "default": 7
     }
   },
   "required": [

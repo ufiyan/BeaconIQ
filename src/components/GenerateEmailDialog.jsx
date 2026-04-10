@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import SendConfirmModal from "./SendConfirmModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,8 @@ export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) 
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [pendingEmail, setPendingEmail] = useState(null); // waiting for send confirmation
+  const [remindTimer, setRemindTimer] = useState(null);
 
   useEffect(() => {
     if (open) {
@@ -31,13 +34,17 @@ export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) 
 
     // Fetch intent score for richer email context
     let intentContext = "";
+    let decisionAuthority = null;
     try {
       const scores = await base44.entities.IntentScore.filter({ lead_id: lead.id }, "-scored_at", 1);
       if (scores[0]) {
         const s = scores[0];
-        if (s.pain_point) intentContext += `\nKnown pain point: ${s.pain_point}`;
-        if (s.urgency_signals) intentContext += `\nUrgency signals they mentioned: ${s.urgency_signals}`;
-        if (s.urgency_level) intentContext += `\nUrgency level: ${s.urgency_level}`;
+        if (s.pain_point) intentContext += `\nThe lead specifically mentioned this problem: "${s.pain_point}". Reference this directly in the email.`;
+        if (s.urgency_signals) intentContext += `\nThe lead showed these urgency signals: "${s.urgency_signals}". Acknowledge their timeline.`;
+        if (s.urgency_level) intentContext += `\nUrgency level: ${s.urgency_level}.`;
+        decisionAuthority = s.decision_authority;
+        if (decisionAuthority === 'High') intentContext += `\nTone instruction: Write peer-to-peer as one executive to another — confident, direct, no fluff.`;
+        else if (decisionAuthority === 'Low') intentContext += `\nTone instruction: Write as educational and helpful — explain value clearly, no pressure.`;
       }
     } catch (_) {}
 
@@ -71,47 +78,62 @@ Output JSON with "subject" and "body" fields.`,
     setGenerating(false);
   };
 
-  const sendEmail = async () => {
+  const sendEmail = () => {
     if (!subject || !body) return;
-    setSending(true);
-
-    // Open pre-filled Gmail compose window
+    // Open Gmail but don't log yet — wait for confirmation
     const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
+    setPendingEmail({ subject, body });
+  };
 
-    // Log the email in the app
+  const confirmSent = async () => {
+    if (!pendingEmail) return;
     await base44.entities.EmailLog.create({
       lead_id: lead.id,
       lead_name: lead.name,
       lead_email: lead.email,
-      subject,
-      body,
+      subject: pendingEmail.subject,
+      body: pendingEmail.body,
       status: "Sent",
       sent_at: new Date().toISOString(),
       ai_generated: true
     });
-
     await base44.entities.Lead.update(lead.id, {
       status: lead.status === "New" ? "Contacted" : lead.status,
       last_contacted: new Date().toISOString(),
       total_emails_sent: (lead.total_emails_sent || 0) + 1
     });
+    toast({ title: "Email logged as sent!" });
+    setPendingEmail(null);
+    setSubject(""); setBody("");
+    onSuccess(); onClose();
+  };
 
-    toast({ title: "Gmail opened! Email logged in app." });
-    setSending(false);
-    setSubject("");
-    setBody("");
-    onSuccess();
+  const cancelSent = () => {
+    setPendingEmail(null);
+    toast({ title: "Email not logged — no record created" });
+  };
+
+  const remindLater = () => {
+    const timer = setTimeout(() => {
+      setPendingEmail(prev => prev); // re-show by keeping pendingEmail set
+    }, 5 * 60 * 1000);
+    setRemindTimer(timer);
+    setPendingEmail(prev => ({ ...prev, snoozed: true }));
+    toast({ title: "Reminder set — we'll ask again in 5 minutes" });
+    setSubject(""); setBody("");
     onClose();
   };
 
   const handleClose = () => {
     setSubject("");
     setBody("");
-    onClose();
+    if (!pendingEmail) onClose();
+    else onClose();
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -160,5 +182,13 @@ Output JSON with "subject" and "body" fields.`,
         </div>
       </DialogContent>
     </Dialog>
-  );
+
+    <SendConfirmModal
+      open={!!(pendingEmail && !pendingEmail.snoozed)}
+      leadName={lead?.name}
+      onConfirm={confirmSent}
+      onCancel={cancelSent}
+      onRemindLater={remindLater}
+    />
+  </>;
 }

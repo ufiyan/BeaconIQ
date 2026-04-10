@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import IntentScoreBadge from "../components/IntentScoreBadge";
-import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2 } from "lucide-react";
+import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2, Clock, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
@@ -32,16 +32,18 @@ export default function Dashboard() {
   const [ingestionSettings, setIngestionSettings] = useState(null);
   const [ingestionLogs, setIngestionLogs] = useState([]);
   const [syncing, setSyncing] = useState(false);
+  const [reminders, setReminders] = useState([]);
 
   useEffect(() => {
     async function load() {
-      const [l, c, e, s, isl, ill] = await Promise.all([
+      const [l, c, e, s, isl, ill, rem] = await Promise.all([
         base44.entities.Lead.list("-created_date", 100),
         base44.entities.Campaign.list("-created_date", 10),
         base44.entities.EmailLog.list("-created_date", 20),
         base44.entities.IntentScore.list("-intent_score", 20),
         base44.entities.EmailIngestionSettings.list("-created_date", 1).catch(() => []),
         base44.entities.EmailIngestionLog.list("-created_date", 5).catch(() => []),
+        base44.entities.FollowUpReminder.filter({ status: "pending" }, "-due_date", 20).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);
@@ -49,6 +51,7 @@ export default function Dashboard() {
       setIntentScores(s);
       setIngestionSettings(isl[0] || null);
       setIngestionLogs(ill);
+      setReminders(rem);
       setLoading(false);
     }
     load();
@@ -131,6 +134,41 @@ export default function Dashboard() {
               </div>
               <Link to={`/leads/${lead.id}`}>
                 <button className="text-xs px-3 py-1 rounded-lg transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}>Generate Email →</button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Follow-up Due */}
+      {reminders.length > 0 && (
+        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid rgba(245,158,11,0.4)" }}>
+          <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+            <Clock className="h-3.5 w-3.5" style={{ color: "#F59E0B" }} />
+            <p className="text-xs font-medium text-white">Follow-up Due</p>
+            <span className="text-xs ml-auto" style={{ color: "#94A3B8" }}>{reminders.length} lead{reminders.length !== 1 ? 's' : ''}</span>
+          </div>
+          {[...reminders].sort((a, b) => {
+            const order = { stale_interested: 0, no_reply: 1, no_contact: 2 };
+            return (order[a.reminder_type] ?? 3) - (order[b.reminder_type] ?? 3);
+          }).slice(0, 5).map(r => (
+            <div key={r.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{
+                  background: r.reminder_type === 'stale_interested' ? 'rgba(239,68,68,0.15)' : r.reminder_type === 'no_reply' ? 'rgba(245,158,11,0.15)' : 'rgba(148,163,184,0.1)',
+                  color: r.reminder_type === 'stale_interested' ? '#EF4444' : r.reminder_type === 'no_reply' ? '#F59E0B' : '#94A3B8',
+                }}>
+                  {r.reminder_type === 'stale_interested' ? 'Stale' : r.reminder_type === 'no_reply' ? 'No Reply' : 'Not Contacted'}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{r.lead_name}</p>
+                  <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{r.lead_company || ''} · {r.days_since_contact}d ago</p>
+                </div>
+              </div>
+              <Link to={`/leads/${r.lead_id}`}>
+                <button className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}>
+                  <Sparkles className="h-3 w-3" /> Follow-up
+                </button>
               </Link>
             </div>
           ))}
