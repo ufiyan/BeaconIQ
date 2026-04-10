@@ -26,7 +26,8 @@ export default function ReviewQueue() {
 
   const loadItems = async () => {
     setLoading(true);
-    const data = await base44.entities.EmailIngestionLog.filter({ result: "pending_review" }, "-created_date", 100);
+    const user = await base44.auth.me();
+    const data = await base44.entities.EmailIngestionLog.filter({ created_by: user.email, result: "pending_review" }, "-created_date", 100);
     setItems(data);
     setLoading(false);
   };
@@ -45,9 +46,10 @@ export default function ReviewQueue() {
   };
 
   const createLead = async (item) => {
+    const user = await base44.auth.me();
     const fields = getFields(item);
     const email = item.extracted_email || item.sender_email;
-    const existing = await base44.entities.Lead.filter({ email });
+    const existing = await base44.entities.Lead.filter({ email, created_by: user.email });
     let leadId;
     if (existing.length > 0) {
       const lead = existing[0];

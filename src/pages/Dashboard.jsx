@@ -36,14 +36,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
+      const user = await base44.auth.me();
+      const uf = { created_by: user.email };
       const [l, c, e, s, isl, ill, rem] = await Promise.all([
-        base44.entities.Lead.list("-created_date", 100),
-        base44.entities.Campaign.list("-created_date", 10),
-        base44.entities.EmailLog.list("-created_date", 20),
-        base44.entities.IntentScore.list("-intent_score", 20),
-        base44.entities.EmailIngestionSettings.list("-created_date", 1).catch(() => []),
-        base44.entities.EmailIngestionLog.list("-created_date", 5).catch(() => []),
-        base44.entities.FollowUpReminder.filter({ status: "pending" }, "-due_date", 20).catch(() => []),
+        base44.entities.Lead.filter(uf, "-created_date", 100),
+        base44.entities.Campaign.filter(uf, "-created_date", 10),
+        base44.entities.EmailLog.filter(uf, "-created_date", 20),
+        base44.entities.IntentScore.filter(uf, "-intent_score", 20),
+        base44.entities.EmailIngestionSettings.filter(uf, "-created_date", 1).catch(() => []),
+        base44.entities.EmailIngestionLog.filter(uf, "-created_date", 5).catch(() => []),
+        base44.entities.FollowUpReminder.filter({ user_email: user.email, status: "pending" }, "-due_date", 20).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);

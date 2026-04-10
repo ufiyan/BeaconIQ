@@ -51,6 +51,10 @@
     "dismiss_reason": {
       "type": "string",
       "title": "Dismiss Reason"
+    },
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
     }
   },
   "required": [

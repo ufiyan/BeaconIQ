@@ -1,10 +1,21 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
 import { Menu, X } from "lucide-react";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    base44.auth.me().then(user => {
+      if (!user) return;
+      base44.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1).then(profiles => {
+        if (profiles.length === 0) navigate('/onboarding');
+      }).catch(() => {});
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="flex h-screen bg-background font-inter overflow-hidden">

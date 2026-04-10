@@ -30,7 +30,8 @@ export default function Settings() {
   const [savingFollowup, setSavingFollowup] = useState(false);
 
   useEffect(() => {
-    base44.entities.BusinessProfile.list("-created_date", 1).then(data => {
+    base44.auth.me().then(user => {
+    base44.entities.BusinessProfile.filter({ created_by: user.email }, "-created_date", 1).then(data => {
       if (data.length > 0) {
         setProfile(data[0]);
         setForm({
@@ -51,7 +52,7 @@ export default function Settings() {
         });
       }
       setLoading(false);
-    });
+    }); });
   }, []);
 
   const handleSave = async () => {

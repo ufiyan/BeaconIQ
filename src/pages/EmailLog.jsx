@@ -11,10 +11,11 @@ export default function EmailLog() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    base44.entities.EmailLog.list("-created_date", 100).then(data => {
+    base44.auth.me().then(user => {
+    base44.entities.EmailLog.filter({ created_by: user.email }, "-created_date", 100).then(data => {
       setEmails(data);
       setLoading(false);
-    });
+    }); });
   }, []);
 
   if (loading) {

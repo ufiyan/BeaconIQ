@@ -6,8 +6,8 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Load follow-up settings from BusinessProfile
-    const profiles = await base44.asServiceRole.entities.BusinessProfile.list('-created_date', 1);
+    // Process follow-ups for THIS user only
+    const profiles = await base44.asServiceRole.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1);
     const profile = profiles[0] || {};
     const enabled = profile.followup_enabled !== false;
     if (!enabled) return Response.json({ message: 'Follow-up reminders disabled' });
@@ -17,13 +17,13 @@ Deno.serve(async (req) => {
     const staleInterestedDays = profile.stale_interested_days ?? 7;
     const now = new Date();
 
-    // Fetch active leads
-    const leads = await base44.asServiceRole.entities.Lead.list('-created_date', 500);
-    const activLeads = leads.filter(l => ['New', 'Contacted', 'Interested'].includes(l.status));
+    // Fetch this user's active leads
+    const leads = await base44.asServiceRole.entities.Lead.filter({ created_by: user.email }, '-created_date', 500);
+    const activeLeads = leads.filter(l => ['New', 'Contacted', 'Interested'].includes(l.status));
 
-    // Get existing pending reminders to avoid duplicates
-    const existingReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ status: 'pending' });
-    const snoozedReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ status: 'snoozed' });
+    // Get existing pending reminders for this user
+    const existingReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'pending' });
+    const snoozedReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'snoozed' });
 
     const existingLeadIds = new Set(existingReminders.map(r => r.lead_id));
 
@@ -35,11 +35,10 @@ Deno.serve(async (req) => {
     }
 
     let created = 0;
-    for (const lead of activLeads) {
+    for (const lead of activeLeads) {
       if (existingLeadIds.has(lead.id)) continue;
 
-      // Find last email sent to this lead
-      const emails = await base44.asServiceRole.entities.EmailLog.filter({ lead_id: lead.id }, '-created_date', 1);
+      const emails = await base44.asServiceRole.entities.EmailLog.filter({ lead_id: lead.id, created_by: user.email }, '-created_date', 1);
       const lastEmail = emails[0];
       const lastContactDate = lastEmail?.sent_at || lastEmail?.created_date || lead.last_contacted;
       const leadCreatedDate = new Date(lead.created_date);
@@ -75,6 +74,7 @@ Deno.serve(async (req) => {
           status: 'pending',
           reminder_type: reminderType,
           days_since_contact: daysSince,
+          user_email: user.email,
         });
         created++;
       }

@@ -14,7 +14,8 @@ export default function Campaigns() {
   const [showCreate, setShowCreate] = useState(false);
 
   const loadCampaigns = async () => {
-    const data = await base44.entities.Campaign.list("-created_date", 50);
+    const user = await base44.auth.me();
+    const data = await base44.entities.Campaign.filter({ created_by: user.email }, "-created_date", 50);
     setCampaigns(data);
     setLoading(false);
   };

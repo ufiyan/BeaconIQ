@@ -20,9 +20,10 @@ export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) 
 
   useEffect(() => {
     if (open) {
-      base44.entities.BusinessProfile.list("-created_date", 1).then(p => {
+      base44.auth.me().then(user => {
+      base44.entities.BusinessProfile.filter({ created_by: user.email }, "-created_date", 1).then(p => {
         if (p.length > 0) setProfile(p[0]);
-      });
+      }); });
     }
   }, [open]);
 

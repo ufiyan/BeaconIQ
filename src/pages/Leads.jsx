@@ -42,10 +42,12 @@ export default function Leads() {
   const [reminderLeadIds, setReminderLeadIds] = useState(new Set());
 
   const loadLeads = async () => {
+    const user = await base44.auth.me();
+    const uf = { created_by: user.email };
     const [data, scores, reminders] = await Promise.all([
-      base44.entities.Lead.list("-created_date", 200),
-      base44.entities.IntentScore.list("-scored_at", 500),
-      base44.entities.FollowUpReminder.filter({ status: "pending" }, "-created_date", 500).catch(() => []),
+      base44.entities.Lead.filter(uf, "-created_date", 200),
+      base44.entities.IntentScore.filter(uf, "-scored_at", 500),
+      base44.entities.FollowUpReminder.filter({ user_email: user.email, status: "pending" }, "-created_date", 500).catch(() => []),
     ]);
     setLeads(data);
     const scoreMap = {};

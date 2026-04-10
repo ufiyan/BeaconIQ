@@ -25,9 +25,11 @@ export default function EmailIngestion() {
 
   const loadData = async () => {
     setLoading(true);
+    const user = await base44.auth.me();
+    const uf = { created_by: user.email };
     const [logData, settingsList] = await Promise.all([
-      base44.entities.EmailIngestionLog.list("-created_date", 100),
-      base44.entities.EmailIngestionSettings.list("-created_date", 1).catch(() => []),
+      base44.entities.EmailIngestionLog.filter(uf, "-created_date", 100),
+      base44.entities.EmailIngestionSettings.filter(uf, "-created_date", 1).catch(() => []),
     ]);
     setLogs(logData);
     setSettings(settingsList[0] || null);

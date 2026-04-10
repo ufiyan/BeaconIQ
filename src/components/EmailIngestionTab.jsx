@@ -31,9 +31,10 @@ export default function EmailIngestionTab() {
 
   const loadAll = async () => {
     setLoading(true);
+    const user = await base44.auth.me();
     const [statusRes, settingsList] = await Promise.all([
       base44.functions.invoke('gmailStatus', {}).catch(() => ({ data: { connected: false, email: null } })),
-      base44.entities.EmailIngestionSettings.list('-created_date', 1).catch(() => []),
+      base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1).catch(() => []),
     ]);
     setGmailStatus(statusRes?.data || { connected: false, email: null });
     if (settingsList.length > 0) {

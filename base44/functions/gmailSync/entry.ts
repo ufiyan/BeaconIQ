@@ -3,14 +3,16 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Load ingestion settings
-    const settingsList = await base44.asServiceRole.entities.EmailIngestionSettings.list('-created_date', 1);
+    // Load the calling user's ingestion settings (user-scoped so created_by matches)
+    const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
     if (!settingsList.length) return Response.json({ error: 'No ingestion settings configured' }, { status: 400 });
     const config = settingsList[0];
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
-    // Get Gmail access token
+    // Get Gmail access token (shared connector - connects to the app builder's Gmail)
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
@@ -42,8 +44,8 @@ Deno.serve(async (req) => {
     const stats = { scanned: messages.length, created: 0, reviewed: 0, skipped: 0 };
 
     for (const { id: messageId } of messages) {
-      // Dedup check
-      const existing = await base44.asServiceRole.entities.EmailIngestionLog.filter({ gmail_message_id: messageId });
+      // Dedup check - scoped to this user
+      const existing = await base44.entities.EmailIngestionLog.filter({ gmail_message_id: messageId, created_by: user.email });
       if (existing.length > 0) continue;
 
       // Fetch full message
@@ -85,7 +87,7 @@ Deno.serve(async (req) => {
       if (keywords.length > 0) {
         const searchText = (subject + ' ' + bodyText).toLowerCase();
         if (!keywords.some(kw => searchText.includes(kw))) {
-          await base44.asServiceRole.entities.EmailIngestionLog.create({
+          await base44.entities.EmailIngestionLog.create({
             gmail_message_id: messageId, sender_name: senderName, sender_email: senderEmail,
             subject, body_preview: bodyText.slice(0, 500),
             received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
@@ -145,7 +147,7 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
       };
 
       if (!aiResult.is_lead) {
-        await base44.asServiceRole.entities.EmailIngestionLog.create({
+        await base44.entities.EmailIngestionLog.create({
           ...logBase, result: 'skipped', skip_reason: aiResult.not_a_lead_reason || 'not a lead',
         });
         stats.skipped++;
@@ -155,26 +157,26 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
       const confirmed = aiResult.confidence >= threshold && autoCreate;
 
       if (!confirmed) {
-        await base44.asServiceRole.entities.EmailIngestionLog.create({ ...logBase, result: 'pending_review' });
+        await base44.entities.EmailIngestionLog.create({ ...logBase, result: 'pending_review' });
         stats.reviewed++;
         continue;
       }
 
-      // Auto-create lead
+      // Auto-create lead (user-scoped: base44.entities will set created_by = user.email)
       const extractedEmail = aiResult.email || senderEmail;
-      const existingLeads = await base44.asServiceRole.entities.Lead.filter({ email: extractedEmail });
+      const existingLeads = await base44.entities.Lead.filter({ email: extractedEmail, created_by: user.email });
 
       if (existingLeads.length > 0) {
         const lead = existingLeads[0];
         const note = `Follow-up email received: ${aiResult.email_body_summary || subject}`;
-        await base44.asServiceRole.entities.Lead.update(lead.id, {
+        await base44.entities.Lead.update(lead.id, {
           notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
         });
-        await base44.asServiceRole.entities.EmailIngestionLog.create({
+        await base44.entities.EmailIngestionLog.create({
           ...logBase, result: 'duplicate_updated', lead_id: lead.id,
         });
       } else {
-        const newLead = await base44.asServiceRole.entities.Lead.create({
+        const newLead = await base44.entities.Lead.create({
           name: aiResult.name || senderName || senderEmail,
           email: extractedEmail, company: aiResult.company || '',
           title: aiResult.title || '', phone: aiResult.phone || '',
@@ -206,7 +208,7 @@ Text: ${scoringText}`,
             }
           });
           const score = scoreResult.intent_score ?? 0;
-          await base44.asServiceRole.entities.IntentScore.create({
+          await base44.entities.IntentScore.create({
             lead_id: newLead.id, intent_score: score,
             urgency_level: scoreResult.urgency_level || 'Low',
             decision_authority: scoreResult.decision_authority || 'Low',
@@ -216,10 +218,10 @@ Text: ${scoringText}`,
             scored_at: now.toISOString(), source_text: scoringText,
           });
           const priority = score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low';
-          await base44.asServiceRole.entities.Lead.update(newLead.id, { priority });
+          await base44.entities.Lead.update(newLead.id, { priority });
         } catch (_) {}
 
-        await base44.asServiceRole.entities.EmailIngestionLog.create({
+        await base44.entities.EmailIngestionLog.create({
           ...logBase, result: 'lead_created', lead_id: newLead.id,
         });
       }
@@ -227,7 +229,7 @@ Text: ${scoringText}`,
     }
 
     // Update settings with last sync info
-    await base44.asServiceRole.entities.EmailIngestionSettings.update(config.id, {
+    await base44.entities.EmailIngestionSettings.update(config.id, {
       last_sync_at: now.toISOString(),
       last_sync_stats: JSON.stringify(stats),
       is_active: true,
