@@ -38,7 +38,7 @@ export default function Campaigns() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
       </div>
     );
   }
@@ -46,65 +46,74 @@ export default function Campaigns() {
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <PageHeader title="Campaigns" description="Automated follow-up sequences">
-        <Button onClick={() => setShowCreate(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> Create Campaign
+        <Button onClick={() => setShowCreate(true)} className="gap-2 text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
+          <Plus className="h-3.5 w-3.5" /> Create Campaign
         </Button>
       </PageHeader>
 
       {campaigns.length === 0 ? (
         <EmptyState icon={Zap} title="No campaigns yet" description="Create your first automated follow-up campaign">
-          <Button onClick={() => setShowCreate(true)} size="sm">Create Campaign</Button>
+          <Button onClick={() => setShowCreate(true)} className="text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Create Campaign</Button>
         </EmptyState>
       ) : (
-        <div className="grid gap-4">
-          {campaigns.map(campaign => (
-            <div key={campaign.id} className="bg-card rounded-2xl border border-border p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-base font-semibold text-foreground">{campaign.name}</h3>
-                    <StatusBadge status={campaign.status} />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {campaigns.map(campaign => {
+            const replyRate = campaign.total_sent > 0 ? Math.round((campaign.total_replied / campaign.total_sent) * 100) : 0;
+            const stepCount = campaign.steps?.length || 0;
+            return (
+              <div key={campaign.id} className="rounded-xl p-5 flex flex-col gap-4" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-xs font-medium text-white truncate">{campaign.name}</h3>
+                      <StatusBadge status={campaign.status} />
+                    </div>
+                    {campaign.description && (
+                      <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{campaign.description}</p>
+                    )}
                   </div>
-                  {campaign.description && (
-                    <p className="text-sm text-muted-foreground">{campaign.description}</p>
-                  )}
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      onClick={() => toggleStatus(campaign)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
+                      style={{ background: "hsl(var(--secondary))", color: "#94A3B8" }}
+                    >
+                      {campaign.status === "Active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => deleteCampaign(campaign.id)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
+                      style={{ background: "hsl(var(--secondary))", color: "#EF4444" }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => toggleStatus(campaign)}
-                    className="h-8 w-8"
-                  >
-                    {campaign.status === "Active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteCampaign(campaign.id)} className="h-8 w-8 text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
 
-              {/* Stats row */}
-              <div className="flex gap-6 mt-4 pt-4 border-t border-border">
-                <div>
-                  <p className="text-xs text-muted-foreground">Leads</p>
-                  <p className="text-sm font-semibold text-foreground">{campaign.total_leads || 0}</p>
+                {/* Step progress pill */}
+                <span className="self-start text-xs px-2.5 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
+                  {stepCount} step{stepCount !== 1 ? "s" : ""}
+                </span>
+
+                {/* Reply rate */}
+                <div className="text-center py-3 rounded-lg" style={{ background: "hsl(var(--secondary))" }}>
+                  <p className="text-2xl font-medium text-white">{replyRate}%</p>
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>reply rate</p>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Emails Sent</p>
-                  <p className="text-sm font-semibold text-foreground">{campaign.total_sent || 0}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Replies</p>
-                  <p className="text-sm font-semibold text-foreground">{campaign.total_replied || 0}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Steps</p>
-                  <p className="text-sm font-semibold text-foreground">{campaign.steps?.length || 0}</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
+                    <p className="text-sm font-medium text-white">{campaign.total_leads || 0}</p>
+                    <p className="text-xs" style={{ color: "#94A3B8" }}>leads</p>
+                  </div>
+                  <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
+                    <p className="text-sm font-medium text-white">{campaign.total_sent || 0}</p>
+                    <p className="text-xs" style={{ color: "#94A3B8" }}>sent</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

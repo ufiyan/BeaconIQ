@@ -1,34 +1,35 @@
 import { cn } from "@/lib/utils";
 
-const statusColors = {
-  "New": "bg-blue-50 text-blue-700 border-blue-200",
-  "Contacted": "bg-amber-50 text-amber-700 border-amber-200",
-  "Replied": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Interested": "bg-violet-50 text-violet-700 border-violet-200",
-  "Meeting Booked": "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "Closed": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Unresponsive": "bg-slate-50 text-slate-500 border-slate-200",
-  "Opted Out": "bg-red-50 text-red-600 border-red-200",
-  "Draft": "bg-slate-50 text-slate-600 border-slate-200",
-  "Active": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Paused": "bg-amber-50 text-amber-700 border-amber-200",
-  "Completed": "bg-blue-50 text-blue-700 border-blue-200",
-  "Sent": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "Delivered": "bg-blue-50 text-blue-700 border-blue-200",
-  "Opened": "bg-violet-50 text-violet-700 border-violet-200",
-  "Bounced": "bg-red-50 text-red-600 border-red-200",
-  "Failed": "bg-red-50 text-red-600 border-red-200",
-  "High": "bg-red-50 text-red-600 border-red-200",
-  "Medium": "bg-amber-50 text-amber-700 border-amber-200",
-  "Low": "bg-slate-50 text-slate-500 border-slate-200",
+const statusStyles = {
+  "New":           { bg: "rgba(59,130,246,0.15)",  color: "#3B82F6" },
+  "Contacted":     { bg: "rgba(99,102,241,0.15)",  color: "#818CF8" },
+  "Replied":       { bg: "rgba(20,184,166,0.15)",  color: "#2DD4BF" },
+  "Interested":    { bg: "rgba(245,158,11,0.15)",  color: "#F59E0B" },
+  "Meeting Booked":{ bg: "rgba(16,185,129,0.15)",  color: "#10B981" },
+  "Closed":        { bg: "rgba(239,68,68,0.15)",   color: "#EF4444" },
+  "Unresponsive":  { bg: "rgba(148,163,184,0.1)",  color: "#94A3B8" },
+  "Opted Out":     { bg: "rgba(239,68,68,0.1)",    color: "#EF4444" },
+  "Draft":         { bg: "rgba(148,163,184,0.1)",  color: "#94A3B8" },
+  "Active":        { bg: "rgba(16,185,129,0.15)",  color: "#10B981" },
+  "Paused":        { bg: "rgba(245,158,11,0.15)",  color: "#F59E0B" },
+  "Completed":     { bg: "rgba(59,130,246,0.15)",  color: "#3B82F6" },
+  "Sent":          { bg: "rgba(16,185,129,0.15)",  color: "#10B981" },
+  "Delivered":     { bg: "rgba(59,130,246,0.15)",  color: "#3B82F6" },
+  "Opened":        { bg: "rgba(139,92,246,0.15)",  color: "#A78BFA" },
+  "Bounced":       { bg: "rgba(239,68,68,0.15)",   color: "#EF4444" },
+  "Failed":        { bg: "rgba(239,68,68,0.15)",   color: "#EF4444" },
+  "High":          { bg: "rgba(239,68,68,0.15)",   color: "#EF4444" },
+  "Medium":        { bg: "rgba(245,158,11,0.15)",  color: "#F59E0B" },
+  "Low":           { bg: "rgba(148,163,184,0.1)",  color: "#94A3B8" },
 };
 
 export default function StatusBadge({ status }) {
+  const s = statusStyles[status] || { bg: "rgba(148,163,184,0.1)", color: "#94A3B8" };
   return (
-    <span className={cn(
-      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
-      statusColors[status] || "bg-slate-50 text-slate-600 border-slate-200"
-    )}>
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+      style={{ background: s.bg, color: s.color }}
+    >
       {status}
     </span>
   );

@@ -49,10 +49,10 @@ export default function Onboarding() {
       <div className="w-full max-w-lg">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-10 justify-center">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-            <TrendingUp className="h-5 w-5 text-primary-foreground" />
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(59,130,246,0.15)' }}>
+            <TrendingUp className="h-5 w-5" style={{ color: '#3B82F6' }} />
           </div>
-          <span className="text-2xl font-bold text-foreground tracking-tight">RevenueAI</span>
+          <span className="text-2xl font-bold tracking-tight"><span className="text-white">Beacon</span><span style={{ color: '#F59E0B' }}>IQ</span></span>
         </div>
 
         {/* Progress */}

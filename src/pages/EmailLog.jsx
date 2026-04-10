@@ -20,7 +20,7 @@ export default function EmailLog() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
       </div>
     );
   }
@@ -32,31 +32,30 @@ export default function EmailLog() {
       {emails.length === 0 ? (
         <EmptyState icon={Mail} title="No emails sent yet" description="Generate and send emails from lead detail pages" />
       ) : (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">Recipient</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">Subject</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden md:table-cell">Status</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden lg:table-cell">Sent</th>
+                <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+                  {["Recipient","Subject","Status","Sent"].map((h, i) => (
+                    <th key={h} className={`text-left px-5 py-3 text-xs font-medium ${i > 1 ? "hidden md:table-cell" : ""}`} style={{ color: "#94A3B8" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {emails.map(email => (
-                  <tr key={email.id} className="hover:bg-muted/50 transition-colors">
+              <tbody>
+                {emails.map((email, idx) => (
+                  <tr key={email.id} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)", borderBottom: "0.5px solid hsl(var(--border))" }}>
                     <td className="px-5 py-3.5">
-                      <p className="text-sm font-medium text-foreground">{email.lead_name || "Unknown"}</p>
-                      <p className="text-xs text-muted-foreground">{email.lead_email}</p>
+                      <p className="text-xs font-medium text-white">{email.lead_name || "Unknown"}</p>
+                      <p className="text-xs" style={{ color: "#94A3B8" }}>{email.lead_email}</p>
                     </td>
                     <td className="px-5 py-3.5">
-                      <p className="text-sm text-foreground truncate max-w-xs">{email.subject}</p>
+                      <p className="text-xs text-white truncate max-w-xs">{email.subject}</p>
                     </td>
                     <td className="px-5 py-3.5 hidden md:table-cell">
                       <StatusBadge status={email.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell">
+                    <td className="px-5 py-3.5 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>
                       {email.sent_at ? moment(email.sent_at).format("MMM D, h:mm A") : "—"}
                     </td>
                   </tr>

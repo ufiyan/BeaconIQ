@@ -62,20 +62,20 @@ export default function LeadDetail() {
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <Link to="/leads" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <Link to="/leads" className="inline-flex items-center gap-2 text-xs mb-6 transition-colors" style={{ color: '#94A3B8' }}>
         <ArrowLeft className="h-4 w-4" /> Back to Leads
       </Link>
 
       {/* Header */}
-      <div className="bg-card rounded-2xl border border-border p-6 mb-6">
+      <div className="rounded-xl p-6 mb-6" style={{ background: 'hsl(var(--card))', border: '0.5px solid hsl(var(--border))' }}>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-xl font-bold text-primary">{lead.name?.charAt(0)?.toUpperCase()}</span>
+            <div className="h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-medium" style={{ background: 'rgba(59,130,246,0.15)', color: '#3B82F6' }}>
+              {lead.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">{lead.name}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
+              <h1 className="font-medium text-white" style={{ fontSize: '18px' }}>{lead.name}</h1>
+              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: '#94A3B8' }}>
                 <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {lead.email}</span>
                 {lead.company && <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" /> {lead.company}</span>}
                 {lead.title && <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {lead.title}</span>}
@@ -84,67 +84,67 @@ export default function LeadDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => setShowGenerate(true)}>
-              <Sparkles className="h-4 w-4" /> Generate Email
+            <Button variant="outline" className="gap-2 text-xs h-8" onClick={() => setShowGenerate(true)}>
+              <Sparkles className="h-3.5 w-3.5" /> Generate Email
             </Button>
-            <Button variant="ghost" size="icon" onClick={deleteLead} className="text-destructive hover:text-destructive">
+            <Button variant="ghost" size="icon" onClick={deleteLead} className="h-8 w-8" style={{ color: '#EF4444' }}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 mt-5 pt-5 border-t border-border">
+        <div className="flex flex-wrap gap-4 mt-5 pt-5" style={{ borderTop: '0.5px solid hsl(var(--border))' }}>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Status</p>
+            <p className="text-xs mb-1" style={{ color: '#94A3B8' }}>Status</p>
             <Select value={lead.status} onValueChange={updateStatus}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["New", "Contacted", "Replied", "Interested", "Meeting Booked", "Closed", "Unresponsive", "Opted Out"].map(s => (
+                {['New','Contacted','Replied','Interested','Meeting Booked','Closed','Unresponsive','Opted Out'].map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Priority</p>
-            <StatusBadge status={lead.priority || "Medium"} />
+            <p className="text-xs mb-1" style={{ color: '#94A3B8' }}>Priority</p>
+            <StatusBadge status={lead.priority || 'Medium'} />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Source</p>
-            <p className="text-sm text-foreground">{lead.source || "—"}</p>
+            <p className="text-xs mb-1" style={{ color: '#94A3B8' }}>Source</p>
+            <p className="text-xs text-white">{lead.source || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Emails Sent</p>
-            <p className="text-sm text-foreground">{lead.total_emails_sent || 0}</p>
+            <p className="text-xs mb-1" style={{ color: '#94A3B8' }}>Emails Sent</p>
+            <p className="text-xs text-white">{lead.total_emails_sent || 0}</p>
           </div>
         </div>
       </div>
 
       {/* Email History */}
-      <div className="bg-card rounded-2xl border border-border">
-        <div className="p-5 border-b border-border">
-          <h2 className="font-semibold text-foreground">Email History</h2>
+      <div className="rounded-xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '0.5px solid hsl(var(--border))' }}>
+        <div className="p-5" style={{ borderBottom: '0.5px solid hsl(var(--border))' }}>
+          <h2 className="text-xs font-medium text-white">Email History</h2>
         </div>
         {emails.length === 0 ? (
           <div className="p-8 text-center">
-            <Mail className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No emails sent yet</p>
-            <Button size="sm" className="mt-3 gap-2" onClick={() => setShowGenerate(true)}>
+            <Mail className="h-7 w-7 mx-auto mb-2" style={{ color: '#94A3B8' }} />
+            <p className="text-xs" style={{ color: '#94A3B8' }}>No emails sent yet</p>
+            <Button size="sm" className="mt-3 gap-2 text-xs h-8" onClick={() => setShowGenerate(true)}>
               <Sparkles className="h-3.5 w-3.5" /> Generate First Email
             </Button>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div>
             {emails.map(email => (
-              <div key={email.id} className="p-5">
+              <div key={email.id} className="p-5" style={{ borderBottom: '0.5px solid hsl(var(--border))' }}>
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <p className="text-sm font-medium text-foreground">{email.subject}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{moment(email.created_date).format("MMM D, YYYY h:mm A")}</p>
+                    <p className="text-xs font-medium text-white">{email.subject}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>{moment(email.created_date).format('MMM D, YYYY h:mm A')}</p>
                   </div>
                   <StatusBadge status={email.status} />
                 </div>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{email.body}</p>
+                <p className="text-xs whitespace-pre-wrap leading-relaxed" style={{ color: '#94A3B8' }}>{email.body}</p>
               </div>
             ))}
           </div>

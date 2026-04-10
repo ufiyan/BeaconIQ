@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
-import { Users, Plus, Upload, Search, Filter } from "lucide-react";
+import { Users, Plus, Upload, Search } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
@@ -11,6 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import moment from "moment";
+
+const PRIORITY_DOTS = {
+  High: "#EF4444",
+  Medium: "#F59E0B",
+  Low: "#94A3B8",
+};
+
+const SOURCE_STYLES = {
+  "CSV Upload": { bg: "rgba(139,92,246,0.15)", color: "#A78BFA" },
+  "Email Ingestion": { bg: "rgba(59,130,246,0.15)", color: "#3B82F6" },
+  "Manual Entry": { bg: "rgba(148,163,184,0.1)", color: "#94A3B8" },
+};
+
+function initials(name) {
+  return name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+}
 
 export default function Leads() {
   const [leads, setLeads] = useState([]);
@@ -29,7 +45,7 @@ export default function Leads() {
   useEffect(() => { loadLeads(); }, []);
 
   const filtered = leads.filter(l => {
-    const matchSearch = !search || 
+    const matchSearch = !search ||
       l.name?.toLowerCase().includes(search.toLowerCase()) ||
       l.email?.toLowerCase().includes(search.toLowerCase()) ||
       l.company?.toLowerCase().includes(search.toLowerCase());
@@ -40,7 +56,7 @@ export default function Leads() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
       </div>
     );
   }
@@ -48,81 +64,81 @@ export default function Leads() {
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <PageHeader title="Leads" description={`${leads.length} total leads`}>
-        <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2">
-          <Upload className="h-4 w-4" /> Import CSV
+        <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2 text-xs h-8">
+          <Upload className="h-3.5 w-3.5" /> Import CSV
         </Button>
-        <Button onClick={() => setShowAdd(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> Add Lead
+        <Button onClick={() => setShowAdd(true)} className="gap-2 text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
+          <Plus className="h-3.5 w-3.5" /> Add Lead
         </Button>
       </PageHeader>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search leads..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9"
-          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "#94A3B8" }} />
+          <Input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-xs" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-44">
-            <SelectValue placeholder="Filter status" />
+          <SelectTrigger className="w-full sm:w-40 h-8 text-xs">
+            <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="New">New</SelectItem>
-            <SelectItem value="Contacted">Contacted</SelectItem>
-            <SelectItem value="Replied">Replied</SelectItem>
-            <SelectItem value="Interested">Interested</SelectItem>
-            <SelectItem value="Meeting Booked">Meeting Booked</SelectItem>
-            <SelectItem value="Closed">Closed</SelectItem>
-            <SelectItem value="Unresponsive">Unresponsive</SelectItem>
+            {["New","Contacted","Replied","Interested","Meeting Booked","Closed","Unresponsive"].map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Table */}
       {filtered.length === 0 ? (
-        <EmptyState icon={Users} title="No leads found" description={search ? "Try a different search" : "Add your first leads to get started"}>
+        <EmptyState icon={Users} title="No leads found" description={search ? "Try a different search" : "Import a CSV or connect Gmail to get started."}>
           {!search && (
-            <Button onClick={() => setShowAdd(true)} size="sm">Add Lead</Button>
+            <Button onClick={() => setShowImport(true)} className="text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Import leads</Button>
           )}
         </EmptyState>
       ) : (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">Name</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden sm:table-cell">Company</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden md:table-cell">Email</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">Status</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden lg:table-cell">Priority</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3 hidden lg:table-cell">Added</th>
+                <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+                  {["Name","Company","Title","Status","Priority","Source","Added"].map((h, i) => (
+                    <th key={h} className={`text-left px-4 py-3 text-xs font-medium ${i > 2 ? "hidden md:table-cell" : ""}`} style={{ color: "#94A3B8" }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(lead => (
-                  <tr key={lead.id} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <Link to={`/leads/${lead.id}`} className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-semibold text-primary">{lead.name?.charAt(0)?.toUpperCase()}</span>
+              <tbody>
+                {filtered.map((lead, idx) => {
+                  const src = SOURCE_STYLES[lead.source] || SOURCE_STYLES["Manual Entry"];
+                  return (
+                    <tr key={lead.id} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)", borderBottom: "0.5px solid hsl(var(--border))" }}>
+                      <td className="px-4 py-3">
+                        <Link to={`/leads/${lead.id}`} className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
+                            {initials(lead.name)}
+                          </div>
+                          <span className="text-xs font-medium text-white hover:underline">{lead.name}</span>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: "#94A3B8" }}>{lead.company || "—"}</td>
+                      <td className="px-4 py-3 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>{lead.title || "—"}</td>
+                      <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={lead.status} /></td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-2 w-2 rounded-full" style={{ background: PRIORITY_DOTS[lead.priority || "Medium"] }} />
+                          <span className="text-xs" style={{ color: "#94A3B8" }}>{lead.priority || "Medium"}</span>
                         </div>
-                        <span className="text-sm font-medium text-foreground hover:text-primary transition-colors">{lead.name}</span>
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden sm:table-cell">{lead.company || "—"}</td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden md:table-cell">{lead.email}</td>
-                    <td className="px-5 py-3.5"><StatusBadge status={lead.status} /></td>
-                    <td className="px-5 py-3.5 hidden lg:table-cell"><StatusBadge status={lead.priority || "Medium"} /></td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell">{moment(lead.created_date).fromNow()}</td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: src.bg, color: src.color }}>
+                          {lead.source || "Manual"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>{moment(lead.created_date).fromNow()}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

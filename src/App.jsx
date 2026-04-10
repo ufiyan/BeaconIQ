@@ -14,6 +14,7 @@ import EmailLog from './pages/EmailLog';
 import Settings from './pages/Settings';
 import Onboarding from './pages/Onboarding';
 import EmailIngestion from './pages/EmailIngestion';
+import ReviewQueue from './pages/ReviewQueue';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -50,6 +51,7 @@ const AuthenticatedApp = () => {
         <Route path="/emails" element={<EmailLog />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/email-ingestion" element={<EmailIngestion />} />
+        <Route path="/review-queue" element={<ReviewQueue />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
