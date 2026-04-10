@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import IntentScoreBadge from "../components/IntentScoreBadge";
-import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap } from "lucide-react";
+import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
@@ -29,19 +29,26 @@ export default function Dashboard() {
   const [emails, setEmails] = useState([]);
   const [intentScores, setIntentScores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ingestionSettings, setIngestionSettings] = useState(null);
+  const [ingestionLogs, setIngestionLogs] = useState([]);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     async function load() {
-      const [l, c, e, s] = await Promise.all([
+      const [l, c, e, s, isl, ill] = await Promise.all([
         base44.entities.Lead.list("-created_date", 100),
         base44.entities.Campaign.list("-created_date", 10),
         base44.entities.EmailLog.list("-created_date", 20),
         base44.entities.IntentScore.list("-intent_score", 20),
+        base44.entities.EmailIngestionSettings.list("-created_date", 1).catch(() => []),
+        base44.entities.EmailIngestionLog.list("-created_date", 5).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);
       setEmails(e);
       setIntentScores(s);
+      setIngestionSettings(isl[0] || null);
+      setIngestionLogs(ill);
       setLoading(false);
     }
     load();
@@ -175,22 +182,62 @@ export default function Dashboard() {
           <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-white">Email Ingestion</p>
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#10B981" }} />
-                <span className="text-xs" style={{ color: "#10B981" }}>Ready</span>
-              </div>
-            </div>
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "#94A3B8" }}>Leads ingested</span>
-                <span className="text-xs text-white">{leads.filter(l => l.source === "Email Ingestion").length}</span>
-              </div>
-            </div>
-            <Link to="/email-ingestion">
-              <button className="w-full py-1.5 rounded-lg text-xs font-medium transition-colors" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
-                Go to Ingestion →
+              <button
+                onClick={async () => {
+                  if (!ingestionSettings?.leads_inbox) return;
+                  setSyncing(true);
+                  await base44.functions.invoke('gmailSync', {}).catch(() => {});
+                  const [isl, ill] = await Promise.all([
+                    base44.entities.EmailIngestionSettings.list('-created_date', 1).catch(() => []),
+                    base44.entities.EmailIngestionLog.list('-created_date', 5).catch(() => []),
+                  ]);
+                  setIngestionSettings(isl[0] || null);
+                  setIngestionLogs(ill);
+                  setSyncing(false);
+                }}
+                disabled={syncing || !ingestionSettings?.leads_inbox}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}
+              >
+                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Sync Now
               </button>
-            </Link>
+            </div>
+
+            {ingestionSettings?.leads_inbox ? (
+              <div className="mb-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: "#10B981" }} />
+                  <span className="text-xs truncate" style={{ color: "#10B981" }}>{ingestionSettings.leads_inbox}</span>
+                </div>
+                {ingestionSettings.last_sync_at && (
+                  <p className="text-xs" style={{ color: "#94A3B8" }}>Last sync: {moment(ingestionSettings.last_sync_at).fromNow()}</p>
+                )}
+              </div>
+            ) : (
+              <div className="mb-3">
+                <p className="text-xs" style={{ color: "#94A3B8" }}>Not configured</p>
+                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#3B82F6" }}>Set up Email Ingestion →</Link>
+              </div>
+            )}
+
+            {ingestionLogs.length > 0 && (
+              <div className="space-y-1.5 mt-3">
+                {ingestionLogs.map(log => {
+                  const badge = log.result === 'lead_created'
+                    ? { bg: "rgba(16,185,129,0.15)", color: "#10B981", label: "Lead" }
+                    : log.result === 'pending_review'
+                    ? { bg: "rgba(245,158,11,0.15)", color: "#F59E0B", label: "Review" }
+                    : { bg: "rgba(148,163,184,0.1)", color: "#94A3B8", label: "Skip" };
+                  return (
+                    <div key={log.id} className="flex items-center gap-2">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                      <span className="text-xs truncate" style={{ color: "#94A3B8" }}>{log.sender_name || log.sender_email}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Active Campaigns */}

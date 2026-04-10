@@ -2,13 +2,14 @@ import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
   { label: "Leads", icon: Users, path: "/leads" },
   { label: "Campaigns", icon: Zap, path: "/campaigns" },
   { label: "Email Log", icon: Mail, path: "/emails" },
-  { label: "Ingestion", icon: Inbox, path: "/email-ingestion" },
+  { label: "Sync Log", icon: Inbox, path: "/email-ingestion" },
   { label: "Review Queue", icon: GitPullRequest, path: "/review-queue" },
   { label: "Settings", icon: Settings, path: "/settings" },
 ];
@@ -16,6 +17,13 @@ const navItems = [
 export default function Sidebar({ onClose }) {
   const location = useLocation();
   const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    base44.entities.EmailIngestionLog.filter({ result: "pending_review" }, "-created_date", 200)
+      .then(items => setPendingCount(items.length))
+      .catch(() => {});
+  }, [location.pathname]);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "hsl(var(--sidebar-background))", borderRight: "1px solid hsl(var(--sidebar-border))" }}>
@@ -52,7 +60,10 @@ export default function Sidebar({ onClose }) {
               }}
             >
               <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.label === "Review Queue" && pendingCount > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full font-bold leading-none" style={{ background: "#F59E0B", color: "#000" }}>{pendingCount}</span>
+              )}
             </Link>
           );
         })}

@@ -1,0 +1,49 @@
+{
+  "name": "EmailIngestionSettings",
+  "type": "object",
+  "properties": {
+    "leads_inbox": {
+      "type": "string",
+      "title": "Leads Inbox Address"
+    },
+    "sync_time": {
+      "type": "string",
+      "title": "Daily Sync Time",
+      "default": "08:00"
+    },
+    "keywords": {
+      "type": "string",
+      "title": "Keyword Filters"
+    },
+    "confidence_threshold": {
+      "type": "number",
+      "title": "Confidence Threshold",
+      "default": 60
+    },
+    "auto_create": {
+      "type": "boolean",
+      "title": "Auto-Create Leads",
+      "default": true
+    },
+    "lookback_window": {
+      "type": "string",
+      "title": "Lookback Window (days)",
+      "default": "7"
+    },
+    "is_active": {
+      "type": "boolean",
+      "title": "Is Active",
+      "default": false
+    },
+    "last_sync_at": {
+      "type": "string",
+      "title": "Last Sync At",
+      "format": "date-time"
+    },
+    "last_sync_stats": {
+      "type": "string",
+      "title": "Last Sync Stats (JSON)"
+    }
+  },
+  "required": []
+}

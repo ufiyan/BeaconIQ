@@ -2,6 +2,10 @@
   "name": "EmailIngestionLog",
   "type": "object",
   "properties": {
+    "gmail_message_id": {
+      "type": "string",
+      "title": "Gmail Message ID"
+    },
     "sender_name": {
       "type": "string",
       "title": "Sender Name"
@@ -14,15 +18,34 @@
       "type": "string",
       "title": "Subject"
     },
+    "body_preview": {
+      "type": "string",
+      "title": "Body Preview"
+    },
+    "received_at": {
+      "type": "string",
+      "title": "Received At",
+      "format": "date-time"
+    },
+    "processed_at": {
+      "type": "string",
+      "title": "Processed At",
+      "format": "date-time"
+    },
     "result": {
       "type": "string",
       "title": "Result",
       "enum": [
         "lead_created",
-        "lead_updated",
+        "duplicate_updated",
+        "pending_review",
         "skipped"
       ],
       "default": "skipped"
+    },
+    "skip_reason": {
+      "type": "string",
+      "title": "Skip Reason"
     },
     "ai_summary": {
       "type": "string",
@@ -35,6 +58,30 @@
     "lead_id": {
       "type": "string",
       "title": "Lead ID"
+    },
+    "extracted_name": {
+      "type": "string",
+      "title": "Extracted Name"
+    },
+    "extracted_email": {
+      "type": "string",
+      "title": "Extracted Email"
+    },
+    "extracted_company": {
+      "type": "string",
+      "title": "Extracted Company"
+    },
+    "extracted_title": {
+      "type": "string",
+      "title": "Extracted Title"
+    },
+    "extracted_industry": {
+      "type": "string",
+      "title": "Extracted Industry"
+    },
+    "email_body_summary": {
+      "type": "string",
+      "title": "Email Body Summary"
     }
   },
   "required": [
