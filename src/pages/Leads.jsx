@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Link } from "react-router-dom";
 import { Users, Plus, Upload, Search } from "lucide-react";
 import PageHeader from "../components/PageHeader";
@@ -33,12 +34,20 @@ export default function Leads() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("intent");
+  const [intentScores, setIntentScores] = useState({});
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
   const loadLeads = async () => {
-    const data = await base44.entities.Lead.list("-created_date", 200);
+    const [data, scores] = await Promise.all([
+      base44.entities.Lead.list("-created_date", 200),
+      base44.entities.IntentScore.list("-scored_at", 500),
+    ]);
     setLeads(data);
+    const scoreMap = {};
+    for (const s of scores) { scoreMap[s.lead_id] = s.intent_score; }
+    setIntentScores(scoreMap);
     setLoading(false);
   };
 
@@ -51,6 +60,11 @@ export default function Leads() {
       l.company?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || l.status === statusFilter;
     return matchSearch && matchStatus;
+  }).sort((a, b) => {
+    if (sortMode === "intent") {
+      return (intentScores[b.id] ?? -1) - (intentScores[a.id] ?? -1);
+    }
+    return new Date(b.created_date) - new Date(a.created_date);
   });
 
   if (loading) {
@@ -64,6 +78,10 @@ export default function Leads() {
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <PageHeader title="Leads" description={`${leads.length} total leads`}>
+        <div className="flex rounded-lg overflow-hidden" style={{ border: '0.5px solid hsl(var(--border))' }}>
+          <button onClick={() => setSortMode('intent')} className="px-3 py-1 text-xs transition-colors" style={{ background: sortMode === 'intent' ? 'hsl(var(--secondary))' : 'transparent', color: sortMode === 'intent' ? '#F59E0B' : '#94A3B8' }}>By Intent</button>
+          <button onClick={() => setSortMode('date')} className="px-3 py-1 text-xs transition-colors" style={{ background: sortMode === 'date' ? 'hsl(var(--secondary))' : 'transparent', color: sortMode === 'date' ? 'white' : '#94A3B8' }}>By Date</button>
+        </div>
         <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2 text-xs h-8">
           <Upload className="h-3.5 w-3.5" /> Import CSV
         </Button>
@@ -103,7 +121,7 @@ export default function Leads() {
             <table className="w-full">
               <thead>
                 <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-                  {["Name","Company","Title","Status","Priority","Source","Added"].map((h, i) => (
+                  {["Name","Company","Status","IQ Score","Priority","Source","Added"].map((h, i) => (
                     <th key={h} className={`text-left px-4 py-3 text-xs font-medium ${i > 2 ? "hidden md:table-cell" : ""}`} style={{ color: "#94A3B8" }}>{h}</th>
                   ))}
                 </tr>
@@ -124,6 +142,9 @@ export default function Leads() {
                       <td className="px-4 py-3 text-xs" style={{ color: "#94A3B8" }}>{lead.company || "—"}</td>
                       <td className="px-4 py-3 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>{lead.title || "—"}</td>
                       <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={lead.status} /></td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <IntentScoreBadge score={intentScores[lead.id]} />
+                      </td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <div className="flex items-center gap-1.5">
                           <div className="h-2 w-2 rounded-full" style={{ background: PRIORITY_DOTS[lead.priority || "Medium"] }} />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import StatsCard from "../components/StatsCard";
@@ -26,18 +27,21 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [emails, setEmails] = useState([]);
+  const [intentScores, setIntentScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const [l, c, e] = await Promise.all([
+      const [l, c, e, s] = await Promise.all([
         base44.entities.Lead.list("-created_date", 100),
         base44.entities.Campaign.list("-created_date", 10),
         base44.entities.EmailLog.list("-created_date", 20),
+        base44.entities.IntentScore.list("-intent_score", 20),
       ]);
       setLeads(l);
       setCampaigns(c);
       setEmails(e);
+      setIntentScores(s);
       setLoading(false);
     }
     load();
@@ -60,6 +64,14 @@ export default function Dashboard() {
 
   const stageCounts = {};
   PIPELINE_STAGES.forEach(s => { stageCounts[s] = leads.filter(l => l.status === s).length; });
+
+  // Top high-intent leads
+  const scoreMap = {};
+  intentScores.forEach(s => { scoreMap[s.lead_id] = s.intent_score; });
+  const highIntentLeads = [...leads]
+    .filter(l => (scoreMap[l.id] ?? -1) >= 70)
+    .sort((a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0))
+    .slice(0, 5);
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -92,6 +104,31 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* High Intent Leads */}
+      {highIntentLeads.length > 0 && (
+        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+          <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: "#F59E0B" }} />
+            <p className="text-xs font-medium text-white">High Intent Leads</p>
+            <span className="text-xs ml-auto" style={{ color: "#94A3B8" }}>Top {highIntentLeads.length} by IQ Score</span>
+          </div>
+          {highIntentLeads.map(lead => (
+            <div key={lead.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <IntentScoreBadge score={scoreMap[lead.id]} />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{lead.name}</p>
+                  <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
+                </div>
+              </div>
+              <Link to={`/leads/${lead.id}`}>
+                <button className="text-xs px-3 py-1 rounded-lg transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}>Generate Email →</button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Two column */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

@@ -1,0 +1,58 @@
+{
+  "name": "IntentScore",
+  "type": "object",
+  "properties": {
+    "lead_id": {
+      "type": "string",
+      "title": "Lead ID"
+    },
+    "intent_score": {
+      "type": "number",
+      "title": "Intent Score"
+    },
+    "urgency_level": {
+      "type": "string",
+      "title": "Urgency Level",
+      "enum": [
+        "Immediate",
+        "High",
+        "Medium",
+        "Low"
+      ]
+    },
+    "decision_authority": {
+      "type": "string",
+      "title": "Decision Authority",
+      "enum": [
+        "High",
+        "Medium",
+        "Low"
+      ]
+    },
+    "pain_point": {
+      "type": "string",
+      "title": "Pain Point"
+    },
+    "urgency_signals": {
+      "type": "string",
+      "title": "Urgency Signals"
+    },
+    "scoring_rationale": {
+      "type": "string",
+      "title": "Scoring Rationale"
+    },
+    "scored_at": {
+      "type": "string",
+      "title": "Scored At",
+      "format": "date-time"
+    },
+    "source_text": {
+      "type": "string",
+      "title": "Source Text"
+    }
+  },
+  "required": [
+    "lead_id",
+    "intent_score"
+  ]
+}

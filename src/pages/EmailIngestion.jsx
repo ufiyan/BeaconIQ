@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { scoreLeadIntent } from "../utils/intentScoring";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,9 @@ ${body}`,
         confidence_score: extracted.confidence_score,
         lead_id: newLead.id
       });
+      // Run intent scoring on the new lead
+      const sourceText = `${subject ? 'Subject: ' + subject + '\n' : ''}${body}`;
+      scoreLeadIntent(newLead.id, sourceText).catch(() => {});
       toast({ title: "New lead created successfully!" });
     }
 

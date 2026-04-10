@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import IntentScoreCard from "../components/IntentScoreCard";
 import { ArrowLeft, Mail, Phone, Building, Briefcase, Trash2, Sparkles, Send, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,16 +16,19 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const [lead, setLead] = useState(null);
   const [emails, setEmails] = useState([]);
+  const [intentScore, setIntentScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
 
   const loadData = async () => {
-    const [leads, allEmails] = await Promise.all([
+    const [leads, allEmails, scores] = await Promise.all([
       base44.entities.Lead.filter({ id }),
       base44.entities.EmailLog.filter({ lead_id: id }, "-created_date", 50),
+      base44.entities.IntentScore.filter({ lead_id: id }, "-scored_at", 1),
     ]);
     setLead(leads[0]);
     setEmails(allEmails);
+    setIntentScore(scores[0] || null);
     setLoading(false);
   };
 
@@ -119,6 +123,8 @@ export default function LeadDetail() {
           </div>
         </div>
       </div>
+
+      <IntentScoreCard lead={lead} intentScore={intentScore} onRescore={loadData} />
 
       {/* Email History */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'hsl(var(--card))', border: '0.5px solid hsl(var(--border))' }}>

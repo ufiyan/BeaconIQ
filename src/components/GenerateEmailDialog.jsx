@@ -25,9 +25,21 @@ export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) 
 
   const generateEmail = async () => {
     setGenerating(true);
-    const context = profile 
+    const context = profile
       ? `Business: ${profile.business_name}. Description: ${profile.description}. Target audience: ${profile.target_audience}. Tone: ${profile.tone}. Goal: ${profile.sales_goal}. Products/Services: ${profile.products_services || 'N/A'}.`
       : "A professional business reaching out to potential clients.";
+
+    // Fetch intent score for richer email context
+    let intentContext = "";
+    try {
+      const scores = await base44.entities.IntentScore.filter({ lead_id: lead.id }, "-scored_at", 1);
+      if (scores[0]) {
+        const s = scores[0];
+        if (s.pain_point) intentContext += `\nKnown pain point: ${s.pain_point}`;
+        if (s.urgency_signals) intentContext += `\nUrgency signals they mentioned: ${s.urgency_signals}`;
+        if (s.urgency_level) intentContext += `\nUrgency level: ${s.urgency_level}`;
+      }
+    } catch (_) {}
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt: `You are an expert sales copywriter. Generate a personalized cold outreach email.
@@ -39,9 +51,9 @@ Lead info:
 - Email: ${lead.email}
 - Company: ${lead.company || 'Unknown'}
 - Title: ${lead.title || 'Unknown'}
-- Industry: ${lead.industry || 'Unknown'}
+- Industry: ${lead.industry || 'Unknown'}${intentContext}
 
-Generate a compelling, personalized email that feels human and not spammy. Keep it concise (under 150 words). Reference something specific about their company or role if possible.
+IMPORTANT: If a pain point or urgency signals are provided above, directly reference them in the email body. Generate a compelling, personalized email that feels human and not spammy. Keep it concise (under 150 words). Reference something specific about their company or role if possible.
 
 Output JSON with "subject" and "body" fields.`,
       response_json_schema: {
