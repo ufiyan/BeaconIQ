@@ -91,8 +91,9 @@ Sample Data: ${JSON.stringify(sampleData)}`,
     const customHeaders = headers.filter(h => mapping[h] === "custom");
     if (customHeaders.length > 0) customFieldCols = customHeaders.length;
 
-    // Fetch existing emails for duplicate check
-    const existingLeads = await base44.entities.Lead.list("-created_date", 1000);
+    // Fetch existing emails for duplicate check — scoped to current user only
+    const user = await base44.auth.me();
+    const existingLeads = await base44.entities.Lead.filter({ created_by: user.email }, "-created_date", 1000);
     const existingEmails = new Set(existingLeads.map(l => l.email?.toLowerCase()).filter(Boolean));
 
     const leadsToCreate = [];

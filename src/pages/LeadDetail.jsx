@@ -22,11 +22,12 @@ export default function LeadDetail() {
   const [activeReminder, setActiveReminder] = useState(null);
 
   const loadData = async () => {
+    const user = await base44.auth.me();
     const [leads, allEmails, scores, reminders] = await Promise.all([
-      base44.entities.Lead.filter({ id }),
-      base44.entities.EmailLog.filter({ lead_id: id }, "-created_date", 50),
-      base44.entities.IntentScore.filter({ lead_id: id }, "-scored_at", 1),
-      base44.entities.FollowUpReminder.filter({ lead_id: id, status: "pending" }, "-created_date", 1).catch(() => []),
+      base44.entities.Lead.filter({ id, created_by: user.email }),
+      base44.entities.EmailLog.filter({ lead_id: id, created_by: user.email }, "-created_date", 50),
+      base44.entities.IntentScore.filter({ lead_id: id, created_by: user.email }, "-scored_at", 1),
+      base44.entities.FollowUpReminder.filter({ lead_id: id, created_by: user.email, status: "pending" }, "-created_date", 1).catch(() => []),
     ]);
     setLead(leads[0]);
     setEmails(allEmails.filter(e => e.status !== "Cancelled"));
