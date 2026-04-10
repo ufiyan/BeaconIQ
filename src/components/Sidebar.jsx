@@ -20,10 +20,11 @@ export default function Sidebar({ onClose }) {
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
-    base44.entities.EmailIngestionLog.filter({ result: "pending_review" }, "-created_date", 200)
+    if (!user) return;
+    base44.entities.EmailIngestionLog.filter({ created_by: user.email, result: "pending_review" }, "-created_date", 200)
       .then(items => setPendingCount(items.length))
       .catch(() => {});
-  }, [location.pathname]);
+  }, [location.pathname, user]);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "hsl(var(--sidebar-background))", borderRight: "1px solid hsl(var(--sidebar-border))" }}>
