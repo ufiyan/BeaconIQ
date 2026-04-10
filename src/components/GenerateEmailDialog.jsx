@@ -190,5 +190,6 @@ Output JSON with "subject" and "body" fields.`,
       onCancel={cancelSent}
       onRemindLater={remindLater}
     />
-  </>;
+    </>
+  );
 }
