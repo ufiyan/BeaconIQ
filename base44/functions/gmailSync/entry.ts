@@ -50,18 +50,21 @@ Deno.serve(async (req) => {
     const autoCreate = config.auto_create !== false;
     const stats = { scanned: messages.length, created: 0, reviewed: 0, skipped: 0 };
 
-    // --- Step 1: Parallel dedup check in batches of 10 ---
-    const dedupChunks = chunkArray(messages, 10);
-    const newMessages = [];
-    for (const chunk of dedupChunks) {
-      const results = await Promise.all(
-        chunk.map(async ({ id: messageId }) => {
-          const existing = await base44.entities.EmailIngestionLog.filter({ gmail_message_id: messageId, created_by: user.email });
-          return existing.length === 0 ? messageId : null;
-        })
-      );
-      results.forEach(id => { if (id) newMessages.push(id); });
-    }
+    // --- Preload existing data into memory for O(1) lookups ---
+    const [existingLogs, existingLeadsList] = await Promise.all([
+      base44.entities.EmailIngestionLog.filter({ created_by: user.email }, '-created_date', 1000),
+      base44.entities.Lead.filter({ created_by: user.email }, '-created_date', 1000),
+    ]);
+    const processedIds = new Set(existingLogs.map(log => log.gmail_message_id));
+    const existingEmails = new Set(existingLeadsList.map(lead => lead.email?.toLowerCase()).filter(Boolean));
+    // Build a map for lead lookup by email (for duplicate update)
+    const leadByEmail = {};
+    existingLeadsList.forEach(lead => { if (lead.email) leadByEmail[lead.email.toLowerCase()] = lead; });
+
+    // --- Step 1: Dedup using in-memory Set (no DB queries) ---
+    const newMessages = messages
+      .map(m => m.id)
+      .filter(id => !processedIds.has(id));
 
     // --- Step 2: Parallel Gmail message detail fetches in batches of 10 ---
     const fetchedMessages = [];
@@ -199,10 +202,10 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
         }
 
         const extractedEmail = aiResult.email || senderEmail;
-        const existingLeads = await base44.entities.Lead.filter({ email: extractedEmail, created_by: user.email });
+        const existingLead = leadByEmail[extractedEmail.toLowerCase()];
 
-        if (existingLeads.length > 0) {
-          const lead = existingLeads[0];
+        if (existingLead) {
+          const lead = existingLead;
           const note = `Follow-up email received: ${aiResult.email_body_summary || subject}`;
           await base44.entities.Lead.update(lead.id, {
             notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
