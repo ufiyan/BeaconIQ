@@ -1,4 +1,10 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
 
 Deno.serve(async (req) => {
   try {
@@ -6,43 +12,46 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Process follow-ups for THIS user only
     const profiles = await base44.asServiceRole.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1);
     const profile = profiles[0] || {};
-    const enabled = profile.followup_enabled !== false;
-    if (!enabled) return Response.json({ message: 'Follow-up reminders disabled' });
+    if (profile.followup_enabled === false) return Response.json({ message: 'Follow-up reminders disabled' });
 
     const noContactDays = profile.no_contact_days ?? 3;
     const noReplyDays = profile.no_reply_days ?? 5;
     const staleInterestedDays = profile.stale_interested_days ?? 7;
     const now = new Date();
 
-    // Fetch this user's active leads
-    const leads = await base44.asServiceRole.entities.Lead.filter({ created_by: user.email }, '-created_date', 500);
+    // Preload all data in parallel
+    const [leads, existingReminders, snoozedReminders, allEmailLogs] = await Promise.all([
+      base44.asServiceRole.entities.Lead.filter({ created_by: user.email }, '-created_date', 500),
+      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'pending' }),
+      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'snoozed' }),
+      base44.asServiceRole.entities.EmailLog.filter({ created_by: user.email }, '-created_date', 2000),
+    ]);
+
     const activeLeads = leads.filter(l => ['New', 'Contacted', 'Interested'].includes(l.status));
-
-    // Get existing pending reminders for this user
-    const existingReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'pending' });
-    const snoozedReminders = await base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'snoozed' });
-
     const existingLeadIds = new Set(existingReminders.map(r => r.lead_id));
 
-    // Re-activate snoozed reminders past their snooze_until
-    for (const r of snoozedReminders) {
-      if (r.snooze_until && new Date(r.snooze_until) <= now) {
-        await base44.asServiceRole.entities.FollowUpReminder.update(r.id, { status: 'pending' });
-      }
+    // Build map of lead_id -> most recent EmailLog (already sorted by -created_date)
+    const latestEmailByLead = {};
+    for (const log of allEmailLogs) {
+      if (!latestEmailByLead[log.lead_id]) latestEmailByLead[log.lead_id] = log;
     }
 
-    let created = 0;
+    // Reactivate snoozed reminders in parallel
+    const snoozedDue = snoozedReminders.filter(r => r.snooze_until && new Date(r.snooze_until) <= now);
+    await Promise.all(snoozedDue.map(r =>
+      base44.asServiceRole.entities.FollowUpReminder.update(r.id, { status: 'pending' })
+    ));
+
+    // Determine which leads need reminders (pure computation, no I/O)
+    const toCreate = [];
     for (const lead of activeLeads) {
       if (existingLeadIds.has(lead.id)) continue;
 
-      const emails = await base44.asServiceRole.entities.EmailLog.filter({ lead_id: lead.id, created_by: user.email }, '-created_date', 1);
-      const lastEmail = emails[0];
+      const lastEmail = latestEmailByLead[lead.id];
       const lastContactDate = lastEmail?.sent_at || lastEmail?.created_date || lead.last_contacted;
-      const leadCreatedDate = new Date(lead.created_date);
-      const daysSinceCreated = (now - leadCreatedDate) / (1000 * 60 * 60 * 24);
+      const daysSinceCreated = (now - new Date(lead.created_date)) / (1000 * 60 * 60 * 24);
 
       let reminderType = null;
       let daysSince = 0;
@@ -66,7 +75,15 @@ Deno.serve(async (req) => {
       }
 
       if (reminderType) {
-        await base44.asServiceRole.entities.FollowUpReminder.create({
+        toCreate.push({ lead, reminderType, daysSince });
+      }
+    }
+
+    // Create reminders in parallel batches of 10
+    let created = 0;
+    for (const chunk of chunkArray(toCreate, 10)) {
+      await Promise.all(chunk.map(({ lead, reminderType, daysSince }) =>
+        base44.asServiceRole.entities.FollowUpReminder.create({
           lead_id: lead.id,
           lead_name: lead.name,
           lead_company: lead.company || '',
@@ -75,9 +92,9 @@ Deno.serve(async (req) => {
           reminder_type: reminderType,
           days_since_contact: daysSince,
           user_email: user.email,
-        });
-        created++;
-      }
+        })
+      ));
+      created += chunk.length;
     }
 
     return Response.json({ success: true, reminders_created: created });
