@@ -19,17 +19,27 @@ function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[checkFollowUps] workspace_id is required — cross-tenant leak prevented');
 }
 
+// Middleware guard: verifies the authenticated user owns the workspace (403 on mismatch)
+async function validateTenant(base44, workspaceId, userId) {
+  const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: workspaceId }, '-created_date', 1);
+  if (!workspaces.length) throw Object.assign(new Error('Workspace not found'), { status: 403 });
+  if (workspaces[0].owner_user_id !== userId) {
+    throw Object.assign(new Error('[checkFollowUps] Tenant mismatch — access denied'), { status: 403 });
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Resolve workspace
+    // Resolve workspace and validate tenant ownership
     const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
     if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
     const workspaceId = workspaces[0].id;
     assertWorkspaceId(workspaceId);
+    await validateTenant(base44, workspaceId, user.id);
 
     const profiles = await base44.asServiceRole.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1);
     const profile = profiles[0] || {};
@@ -40,13 +50,13 @@ Deno.serve(async (req) => {
     const staleInterestedDays = profile.stale_interested_days ?? 7;
     const now = new Date();
 
-    // Preload all workspace-scoped data in parallel
+    // Preload all workspace-scoped data in parallel — user-scoped client enforces RLS
     assertWorkspaceId(workspaceId);
     const [leadsResult, pendingResult, snoozedResult, emailLogsResult] = await Promise.allSettled([
-      base44.asServiceRole.entities.Lead.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 500),
-      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, workspace_id: workspaceId, status: 'pending' }),
-      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, workspace_id: workspaceId, status: 'snoozed' }),
-      base44.asServiceRole.entities.EmailLog.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 2000),
+      base44.entities.Lead.filter({ workspace_id: workspaceId }, '-created_date', 500),
+      base44.entities.FollowUpReminder.filter({ workspace_id: workspaceId, status: 'pending' }),
+      base44.entities.FollowUpReminder.filter({ workspace_id: workspaceId, status: 'snoozed' }),
+      base44.entities.EmailLog.filter({ workspace_id: workspaceId }, '-created_date', 2000),
     ]);
 
     [leadsResult, pendingResult, snoozedResult, emailLogsResult].forEach((r, i) => {
@@ -71,7 +81,7 @@ Deno.serve(async (req) => {
     const snoozedDue = snoozedReminders.filter(r => r.snooze_until && new Date(r.snooze_until) <= now);
     const snoozeResults = await withConcurrencyLimit(
       snoozedDue.map(r => () =>
-        base44.asServiceRole.entities.FollowUpReminder.update(r.id, { status: 'pending' })
+        base44.entities.FollowUpReminder.update(r.id, { status: 'pending' })
       ),
       10
     );
@@ -112,11 +122,11 @@ Deno.serve(async (req) => {
       if (reminderType) toCreate.push({ lead, reminderType, daysSince });
     }
 
-    // Create reminders with concurrency limit (workspace-scoped)
+    // Create reminders with concurrency limit — user-scoped client enforces RLS
     assertWorkspaceId(workspaceId);
     const createResults = await withConcurrencyLimit(
       toCreate.map(({ lead, reminderType, daysSince }) => () =>
-        base44.asServiceRole.entities.FollowUpReminder.create({
+        base44.entities.FollowUpReminder.create({
           workspace_id: workspaceId,
           lead_id: lead.id,
           lead_name: lead.name,
@@ -137,6 +147,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true, reminders_created: created, errors: errors.length });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    const status = error.status === 403 ? 403 : 500;
+    return Response.json({ error: error.message }, { status });
   }
 });

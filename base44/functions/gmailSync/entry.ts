@@ -33,6 +33,15 @@ function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
 }
 
+// Middleware guard: verifies the authenticated user owns the workspace (403 on mismatch)
+async function validateTenant(base44, workspaceId, userId) {
+  const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: workspaceId }, '-created_date', 1);
+  if (!workspaces.length) throw Object.assign(new Error('Workspace not found'), { status: 403 });
+  if (workspaces[0].owner_user_id !== userId) {
+    throw Object.assign(new Error('[gmailSync] Tenant mismatch — access denied'), { status: 403 });
+  }
+}
+
 Deno.serve(async (req) => {
   const abortControllers = [];
   const now = new Date();
@@ -45,11 +54,12 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Resolve workspace
+    // Resolve workspace and validate tenant ownership
     const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
     if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
     workspaceId = workspaces[0].id;
     assertWorkspaceId(workspaceId);
+    await validateTenant(base44, workspaceId, user.id);
 
     // Load ingestion settings scoped to workspace
     const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
@@ -62,9 +72,9 @@ Deno.serve(async (req) => {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
-    // Cursor-based sync window
+    // Cursor-based sync window — user-scoped client enforces RLS
     const recentLogs = await base44.entities.EmailIngestionLog.filter(
-      { created_by: user.email, workspace_id: workspaceId }, '-created_date', 1
+      { workspace_id: workspaceId }, '-created_date', 1
     );
     assertWorkspaceId(workspaceId);
     const lastSyncAt = recentLogs.length > 0
@@ -91,11 +101,11 @@ Deno.serve(async (req) => {
     const autoCreate = config.auto_create !== false;
     const stats = { scanned: messages.length, created: 0, reviewed: 0, skipped: 0, errors: 0 };
 
-    // Preload existing workspace-scoped data in parallel
+    // Preload existing workspace-scoped data in parallel — user-scoped client enforces RLS
     assertWorkspaceId(workspaceId);
     const [existingLogsResult, existingLeadsResult] = await Promise.allSettled([
-      base44.entities.EmailIngestionLog.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 1000),
-      base44.entities.Lead.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 1000),
+      base44.entities.EmailIngestionLog.filter({ workspace_id: workspaceId }, '-created_date', 1000),
+      base44.entities.Lead.filter({ workspace_id: workspaceId }, '-created_date', 1000),
     ]);
 
     if (existingLogsResult.status === 'rejected') console.error('[gmailSync] preload logs error:', existingLogsResult.reason);
@@ -283,7 +293,7 @@ Text: ${scoringText}`,
             }
           });
           const score = scoreResult.intent_score ?? 0;
-          await base44.asServiceRole.entities.IntentScore.create({
+          await base44.entities.IntentScore.create({
             lead_id: newLead.id, intent_score: score,
             urgency_level: scoreResult.urgency_level || 'Low',
             decision_authority: scoreResult.decision_authority || 'Low',
@@ -309,6 +319,9 @@ Text: ${scoringText}`,
     });
 
     return Response.json({ success: true, stats });
+  } catch (error) {
+    const status = error.status === 403 ? 403 : 500;
+    return Response.json({ error: error.message }, { status });
   } finally {
     // Cleanup: abort any lingering fetch controllers
     abortControllers.forEach(ac => { try { ac.abort(); } catch (_) {} });
