@@ -23,19 +23,17 @@ Deno.serve(async (req) => {
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
-    // Determine time window
     const now = new Date();
-    let afterDate;
-    if (config.last_sync_at) {
-      afterDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    } else {
-      const days = parseInt(config.lookback_window || '7');
-      afterDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    }
-    const afterEpoch = Math.floor(afterDate.getTime() / 1000);
 
-    // Fetch Gmail message list
-    const query = `to:${config.leads_inbox} after:${afterEpoch}`;
+    // Use last processed EmailLog as cursor; default to 24h ago if none exists
+    const recentLogs = await base44.entities.EmailIngestionLog.filter({ created_by: user.email }, '-created_date', 1);
+    const lastSyncAt = recentLogs.length > 0
+      ? recentLogs[0].created_date
+      : new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const afterTimestamp = Math.floor(new Date(lastSyncAt).getTime() / 1000);
+
+    // Fetch Gmail message list using cursor-based query
+    const query = `in:inbox after:${afterTimestamp}`;
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=200`,
       { headers: authHeader }
