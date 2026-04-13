@@ -1,18 +1,25 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
+// Split array into chunks of size n
+function chunkArray(arr, n) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += n) chunks.push(arr.slice(i, i + n));
+  return chunks;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Load the calling user's ingestion settings (user-scoped so created_by matches)
+    // Load the calling user's ingestion settings
     const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
     if (!settingsList.length) return Response.json({ error: 'No ingestion settings configured' }, { status: 400 });
     const config = settingsList[0];
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
-    // Get Gmail access token (shared connector - connects to the app builder's Gmail)
+    // Get Gmail access token
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
@@ -27,7 +34,7 @@ Deno.serve(async (req) => {
     }
     const afterEpoch = Math.floor(afterDate.getTime() / 1000);
 
-    // Fetch Gmail messages
+    // Fetch Gmail message list
     const query = `to:${config.leads_inbox} after:${afterEpoch}`;
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=200`,
@@ -43,37 +50,53 @@ Deno.serve(async (req) => {
     const autoCreate = config.auto_create !== false;
     const stats = { scanned: messages.length, created: 0, reviewed: 0, skipped: 0 };
 
-    for (const { id: messageId } of messages) {
-      // Dedup check - scoped to this user
-      const existing = await base44.entities.EmailIngestionLog.filter({ gmail_message_id: messageId, created_by: user.email });
-      if (existing.length > 0) continue;
-
-      // Fetch full message
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-        { headers: authHeader }
+    // --- Step 1: Parallel dedup check in batches of 10 ---
+    const dedupChunks = chunkArray(messages, 10);
+    const newMessages = [];
+    for (const chunk of dedupChunks) {
+      const results = await Promise.all(
+        chunk.map(async ({ id: messageId }) => {
+          const existing = await base44.entities.EmailIngestionLog.filter({ gmail_message_id: messageId, created_by: user.email });
+          return existing.length === 0 ? messageId : null;
+        })
       );
-      if (!msgRes.ok) continue;
-      const message = await msgRes.json();
+      results.forEach(id => { if (id) newMessages.push(id); });
+    }
 
+    // --- Step 2: Parallel Gmail message detail fetches in batches of 10 ---
+    const fetchedMessages = [];
+    const fetchChunks = chunkArray(newMessages, 10);
+    for (const chunk of fetchChunks) {
+      const results = await Promise.all(
+        chunk.map(async (messageId) => {
+          const msgRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+            { headers: authHeader }
+          );
+          if (!msgRes.ok) return null;
+          const message = await msgRes.json();
+          return { messageId, message };
+        })
+      );
+      results.forEach(r => { if (r) fetchedMessages.push(r); });
+    }
+
+    // --- Step 3: Parse fetched messages ---
+    const parsedMessages = fetchedMessages.map(({ messageId, message }) => {
       const hdrs = message.payload?.headers || [];
       const hdr = (name) => hdrs.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
       const from = hdr('From');
       const subject = hdr('Subject');
       const dateStr = hdr('Date');
-
       const fromMatch = from.match(/^(.*?)\s*<(.+?)>$/) || [null, '', from];
       const senderName = fromMatch[1].trim().replace(/^"|"$/g, '');
       const senderEmail = fromMatch[2].trim() || from;
 
-      // Extract body text
       let bodyText = '';
       const extractBody = (part) => {
         if (!part) return;
         if (part.mimeType === 'text/plain' && part.body?.data) {
-          try {
-            bodyText += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-          } catch (_) {}
+          try { bodyText += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch (_) {}
         } else if (part.parts) {
           part.parts.forEach(extractBody);
         }
@@ -83,24 +106,38 @@ Deno.serve(async (req) => {
         try { bodyText = atob(message.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch (_) {}
       }
 
-      // Keyword filter
-      if (keywords.length > 0) {
-        const searchText = (subject + ' ' + bodyText).toLowerCase();
-        if (!keywords.some(kw => searchText.includes(kw))) {
-          await base44.entities.EmailIngestionLog.create({
-            gmail_message_id: messageId, sender_name: senderName, sender_email: senderEmail,
-            subject, body_preview: bodyText.slice(0, 500),
-            received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
-            processed_at: now.toISOString(), result: 'skipped', skip_reason: 'no keyword match',
-          });
-          stats.skipped++;
-          continue;
-        }
-      }
+      return { messageId, subject, dateStr, senderName, senderEmail, bodyText };
+    });
 
-      // AI extraction
-      const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-        prompt: `You are BeaconIQ's lead extraction engine. Analyze the following email and determine whether the sender is a potential B2B lead. Return ONLY a valid JSON object with these exact fields:
+    // --- Step 4: Keyword filter (sync, no I/O) ---
+    const toProcess = parsedMessages.filter(({ subject, bodyText }) => {
+      if (keywords.length === 0) return true;
+      const searchText = (subject + ' ' + bodyText).toLowerCase();
+      return keywords.some(kw => searchText.includes(kw));
+    });
+
+    // Log keyword-skipped messages
+    const keywordSkipped = parsedMessages.filter(({ subject, bodyText }) => {
+      if (keywords.length === 0) return false;
+      const searchText = (subject + ' ' + bodyText).toLowerCase();
+      return !keywords.some(kw => searchText.includes(kw));
+    });
+    await Promise.all(keywordSkipped.map(({ messageId, subject, dateStr, senderName, senderEmail, bodyText }) =>
+      base44.entities.EmailIngestionLog.create({
+        gmail_message_id: messageId, sender_name: senderName, sender_email: senderEmail,
+        subject, body_preview: bodyText.slice(0, 500),
+        received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
+        processed_at: now.toISOString(), result: 'skipped', skip_reason: 'no keyword match',
+      })
+    ));
+    stats.skipped += keywordSkipped.length;
+
+    // --- Step 5: Parallel AI extraction in batches of 10 ---
+    const processChunks = chunkArray(toProcess, 10);
+    for (const chunk of processChunks) {
+      await Promise.all(chunk.map(async ({ messageId, subject, dateStr, senderName, senderEmail, bodyText }) => {
+        const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          prompt: `You are BeaconIQ's lead extraction engine. Analyze the following email and determine whether the sender is a potential B2B lead. Return ONLY a valid JSON object with these exact fields:
 is_lead: boolean
 confidence: integer 0-100
 name: string or null
@@ -113,82 +150,79 @@ email_body_summary: one sentence describing what this person is asking about
 not_a_lead_reason: if is_lead is false, one short phrase explaining why
 
 Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. Email body: ${bodyText.slice(0, 3000)}`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            is_lead: { type: "boolean" },
-            confidence: { type: "number" },
-            name: { type: "string" },
-            email: { type: "string" },
-            company: { type: "string" },
-            title: { type: "string" },
-            phone: { type: "string" },
-            industry: { type: "string" },
-            email_body_summary: { type: "string" },
-            not_a_lead_reason: { type: "string" }
-          },
-          required: ["is_lead", "confidence"]
+          response_json_schema: {
+            type: "object",
+            properties: {
+              is_lead: { type: "boolean" },
+              confidence: { type: "number" },
+              name: { type: "string" },
+              email: { type: "string" },
+              company: { type: "string" },
+              title: { type: "string" },
+              phone: { type: "string" },
+              industry: { type: "string" },
+              email_body_summary: { type: "string" },
+              not_a_lead_reason: { type: "string" }
+            },
+            required: ["is_lead", "confidence"]
+          }
+        });
+
+        const logBase = {
+          gmail_message_id: messageId,
+          sender_name: senderName, sender_email: senderEmail, subject,
+          body_preview: bodyText.slice(0, 500),
+          received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
+          processed_at: now.toISOString(),
+          confidence_score: aiResult.confidence,
+          email_body_summary: aiResult.email_body_summary || '',
+          extracted_name: aiResult.name || '',
+          extracted_email: aiResult.email || senderEmail,
+          extracted_company: aiResult.company || '',
+          extracted_title: aiResult.title || '',
+          extracted_industry: aiResult.industry || '',
+        };
+
+        if (!aiResult.is_lead) {
+          await base44.entities.EmailIngestionLog.create({
+            ...logBase, result: 'skipped', skip_reason: aiResult.not_a_lead_reason || 'not a lead',
+          });
+          stats.skipped++;
+          return;
         }
-      });
 
-      const logBase = {
-        gmail_message_id: messageId,
-        sender_name: senderName, sender_email: senderEmail, subject,
-        body_preview: bodyText.slice(0, 500),
-        received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
-        processed_at: now.toISOString(),
-        confidence_score: aiResult.confidence,
-        email_body_summary: aiResult.email_body_summary || '',
-        extracted_name: aiResult.name || '',
-        extracted_email: aiResult.email || senderEmail,
-        extracted_company: aiResult.company || '',
-        extracted_title: aiResult.title || '',
-        extracted_industry: aiResult.industry || '',
-      };
+        const confirmed = aiResult.confidence >= threshold && autoCreate;
+        if (!confirmed) {
+          await base44.entities.EmailIngestionLog.create({ ...logBase, result: 'pending_review' });
+          stats.reviewed++;
+          return;
+        }
 
-      if (!aiResult.is_lead) {
-        await base44.entities.EmailIngestionLog.create({
-          ...logBase, result: 'skipped', skip_reason: aiResult.not_a_lead_reason || 'not a lead',
-        });
-        stats.skipped++;
-        continue;
-      }
+        const extractedEmail = aiResult.email || senderEmail;
+        const existingLeads = await base44.entities.Lead.filter({ email: extractedEmail, created_by: user.email });
 
-      const confirmed = aiResult.confidence >= threshold && autoCreate;
+        if (existingLeads.length > 0) {
+          const lead = existingLeads[0];
+          const note = `Follow-up email received: ${aiResult.email_body_summary || subject}`;
+          await base44.entities.Lead.update(lead.id, {
+            notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
+          });
+          await base44.entities.EmailIngestionLog.create({
+            ...logBase, result: 'duplicate_updated', lead_id: lead.id,
+          });
+        } else {
+          const newLead = await base44.entities.Lead.create({
+            name: aiResult.name || senderName || senderEmail,
+            email: extractedEmail, company: aiResult.company || '',
+            title: aiResult.title || '', phone: aiResult.phone || '',
+            industry: aiResult.industry || '', source: 'Gmail Ingestion',
+            status: 'New', priority: 'Medium', notes: aiResult.email_body_summary || '',
+          });
 
-      if (!confirmed) {
-        await base44.entities.EmailIngestionLog.create({ ...logBase, result: 'pending_review' });
-        stats.reviewed++;
-        continue;
-      }
-
-      // Auto-create lead (user-scoped: base44.entities will set created_by = user.email)
-      const extractedEmail = aiResult.email || senderEmail;
-      const existingLeads = await base44.entities.Lead.filter({ email: extractedEmail, created_by: user.email });
-
-      if (existingLeads.length > 0) {
-        const lead = existingLeads[0];
-        const note = `Follow-up email received: ${aiResult.email_body_summary || subject}`;
-        await base44.entities.Lead.update(lead.id, {
-          notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
-        });
-        await base44.entities.EmailIngestionLog.create({
-          ...logBase, result: 'duplicate_updated', lead_id: lead.id,
-        });
-      } else {
-        const newLead = await base44.entities.Lead.create({
-          name: aiResult.name || senderName || senderEmail,
-          email: extractedEmail, company: aiResult.company || '',
-          title: aiResult.title || '', phone: aiResult.phone || '',
-          industry: aiResult.industry || '', source: 'Gmail Ingestion',
-          status: 'New', priority: 'Medium', notes: aiResult.email_body_summary || '',
-        });
-
-        // Intent scoring
-        try {
-          const scoringText = `Subject: ${subject}\n${bodyText}`.slice(0, 2000);
-          const scoreResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-            prompt: `You are BeaconIQ's intent scoring engine. Analyze the following B2B lead text. Return ONLY valid JSON:
+          try {
+            const scoringText = `Subject: ${subject}\n${bodyText}`.slice(0, 2000);
+            const scoreResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+              prompt: `You are BeaconIQ's intent scoring engine. Analyze the following B2B lead text. Return ONLY valid JSON:
 intent_score: integer 0-100
 urgency_level: 'Immediate', 'High', 'Medium', or 'Low'
 decision_authority: 'High', 'Medium', or 'Low'
@@ -197,35 +231,36 @@ urgency_signals: up to 3 phrases as comma-separated string, or null
 scoring_rationale: one sentence
 
 Text: ${scoringText}`,
-            response_json_schema: {
-              type: "object",
-              properties: {
-                intent_score: { type: "number" }, urgency_level: { type: "string" },
-                decision_authority: { type: "string" }, pain_point: { type: "string" },
-                urgency_signals: { type: "string" }, scoring_rationale: { type: "string" }
-              },
-              required: ["intent_score", "urgency_level", "decision_authority"]
-            }
-          });
-          const score = scoreResult.intent_score ?? 0;
-          await base44.entities.IntentScore.create({
-            lead_id: newLead.id, intent_score: score,
-            urgency_level: scoreResult.urgency_level || 'Low',
-            decision_authority: scoreResult.decision_authority || 'Low',
-            pain_point: scoreResult.pain_point || null,
-            urgency_signals: scoreResult.urgency_signals || null,
-            scoring_rationale: scoreResult.scoring_rationale || null,
-            scored_at: now.toISOString(), source_text: scoringText,
-          });
-          const priority = score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low';
-          await base44.entities.Lead.update(newLead.id, { priority });
-        } catch (_) {}
+              response_json_schema: {
+                type: "object",
+                properties: {
+                  intent_score: { type: "number" }, urgency_level: { type: "string" },
+                  decision_authority: { type: "string" }, pain_point: { type: "string" },
+                  urgency_signals: { type: "string" }, scoring_rationale: { type: "string" }
+                },
+                required: ["intent_score", "urgency_level", "decision_authority"]
+              }
+            });
+            const score = scoreResult.intent_score ?? 0;
+            await base44.entities.IntentScore.create({
+              lead_id: newLead.id, intent_score: score,
+              urgency_level: scoreResult.urgency_level || 'Low',
+              decision_authority: scoreResult.decision_authority || 'Low',
+              pain_point: scoreResult.pain_point || null,
+              urgency_signals: scoreResult.urgency_signals || null,
+              scoring_rationale: scoreResult.scoring_rationale || null,
+              scored_at: now.toISOString(), source_text: scoringText,
+            });
+            const priority = score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low';
+            await base44.entities.Lead.update(newLead.id, { priority });
+          } catch (_) {}
 
-        await base44.entities.EmailIngestionLog.create({
-          ...logBase, result: 'lead_created', lead_id: newLead.id,
-        });
-      }
-      stats.created++;
+          await base44.entities.EmailIngestionLog.create({
+            ...logBase, result: 'lead_created', lead_id: newLead.id,
+          });
+        }
+        stats.created++;
+      }));
     }
 
     // Update settings with last sync info
