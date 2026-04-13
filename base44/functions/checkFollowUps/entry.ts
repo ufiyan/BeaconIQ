@@ -14,11 +14,22 @@ async function withConcurrencyLimit(tasks, limit) {
   return Promise.allSettled(results);
 }
 
+// Guard: throws if workspace_id is missing
+function assertWorkspaceId(workspace_id) {
+  if (!workspace_id) throw new Error('[checkFollowUps] workspace_id is required — cross-tenant leak prevented');
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Resolve workspace
+    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
+    if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
+    const workspaceId = workspaces[0].id;
+    assertWorkspaceId(workspaceId);
 
     const profiles = await base44.asServiceRole.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1);
     const profile = profiles[0] || {};
@@ -29,12 +40,13 @@ Deno.serve(async (req) => {
     const staleInterestedDays = profile.stale_interested_days ?? 7;
     const now = new Date();
 
-    // Preload all data in parallel
+    // Preload all workspace-scoped data in parallel
+    assertWorkspaceId(workspaceId);
     const [leadsResult, pendingResult, snoozedResult, emailLogsResult] = await Promise.allSettled([
-      base44.asServiceRole.entities.Lead.filter({ created_by: user.email }, '-created_date', 500),
-      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'pending' }),
-      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, status: 'snoozed' }),
-      base44.asServiceRole.entities.EmailLog.filter({ created_by: user.email }, '-created_date', 2000),
+      base44.asServiceRole.entities.Lead.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 500),
+      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, workspace_id: workspaceId, status: 'pending' }),
+      base44.asServiceRole.entities.FollowUpReminder.filter({ user_email: user.email, workspace_id: workspaceId, status: 'snoozed' }),
+      base44.asServiceRole.entities.EmailLog.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 2000),
     ]);
 
     [leadsResult, pendingResult, snoozedResult, emailLogsResult].forEach((r, i) => {
@@ -55,7 +67,7 @@ Deno.serve(async (req) => {
       if (!latestEmailByLead[log.lead_id]) latestEmailByLead[log.lead_id] = log;
     }
 
-    // Reactivate snoozed reminders that are past their snooze_until
+    // Reactivate snoozed reminders past their snooze_until
     const snoozedDue = snoozedReminders.filter(r => r.snooze_until && new Date(r.snooze_until) <= now);
     const snoozeResults = await withConcurrencyLimit(
       snoozedDue.map(r => () =>
@@ -100,10 +112,12 @@ Deno.serve(async (req) => {
       if (reminderType) toCreate.push({ lead, reminderType, daysSince });
     }
 
-    // Create reminders with concurrency limit
+    // Create reminders with concurrency limit (workspace-scoped)
+    assertWorkspaceId(workspaceId);
     const createResults = await withConcurrencyLimit(
       toCreate.map(({ lead, reminderType, daysSince }) => () =>
         base44.asServiceRole.entities.FollowUpReminder.create({
+          workspace_id: workspaceId,
           lead_id: lead.id,
           lead_name: lead.name,
           lead_company: lead.company || '',

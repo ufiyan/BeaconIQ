@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// Semaphore-based concurrency limiter
+// --- Concurrency helpers ---
+
 async function withConcurrencyLimit(tasks, limit) {
   const results = [];
   const executing = [];
@@ -14,7 +15,6 @@ async function withConcurrencyLimit(tasks, limit) {
   return Promise.allSettled(results);
 }
 
-// Fetch with retry and exponential backoff for 429/5xx errors
 async function fetchWithRetry(url, options, retries = 3) {
   for (let i = 0; i < retries; i++) {
     const res = await fetch(url, options);
@@ -28,27 +28,45 @@ async function fetchWithRetry(url, options, retries = 3) {
   return null;
 }
 
+// Guard: throws if workspace_id is missing
+function assertWorkspaceId(workspace_id) {
+  if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
+}
+
 Deno.serve(async (req) => {
   const abortControllers = [];
   const now = new Date();
+  let base44 = null;
+  let workspaceId = null;
+  let configId = null;
 
   try {
-    const base44 = createClientFromRequest(req);
+    base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Load ingestion settings
+    // Resolve workspace
+    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
+    if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
+    workspaceId = workspaces[0].id;
+    assertWorkspaceId(workspaceId);
+
+    // Load ingestion settings scoped to workspace
     const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
     if (!settingsList.length) return Response.json({ error: 'No ingestion settings configured' }, { status: 400 });
     const config = settingsList[0];
+    configId = config.id;
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
     // Get Gmail access token
     const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
-    // Cursor-based time window
-    const recentLogs = await base44.entities.EmailIngestionLog.filter({ created_by: user.email }, '-created_date', 1);
+    // Cursor-based sync window
+    const recentLogs = await base44.entities.EmailIngestionLog.filter(
+      { created_by: user.email, workspace_id: workspaceId }, '-created_date', 1
+    );
+    assertWorkspaceId(workspaceId);
     const lastSyncAt = recentLogs.length > 0
       ? recentLogs[0].created_date
       : new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -73,22 +91,26 @@ Deno.serve(async (req) => {
     const autoCreate = config.auto_create !== false;
     const stats = { scanned: messages.length, created: 0, reviewed: 0, skipped: 0, errors: 0 };
 
-    // Preload existing data in parallel for O(1) lookups
-    const [existingLogs, existingLeadsList] = await Promise.allSettled([
-      base44.entities.EmailIngestionLog.filter({ created_by: user.email }, '-created_date', 1000),
-      base44.entities.Lead.filter({ created_by: user.email }, '-created_date', 1000),
+    // Preload existing workspace-scoped data in parallel
+    assertWorkspaceId(workspaceId);
+    const [existingLogsResult, existingLeadsResult] = await Promise.allSettled([
+      base44.entities.EmailIngestionLog.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 1000),
+      base44.entities.Lead.filter({ created_by: user.email, workspace_id: workspaceId }, '-created_date', 1000),
     ]);
+
+    if (existingLogsResult.status === 'rejected') console.error('[gmailSync] preload logs error:', existingLogsResult.reason);
+    if (existingLeadsResult.status === 'rejected') console.error('[gmailSync] preload leads error:', existingLeadsResult.reason);
+
     const processedIds = new Set(
-      (existingLogs.status === 'fulfilled' ? existingLogs.value : []).map(log => log.gmail_message_id)
+      (existingLogsResult.status === 'fulfilled' ? existingLogsResult.value : []).map(l => l.gmail_message_id)
     );
-    const existingLeadsData = existingLeadsList.status === 'fulfilled' ? existingLeadsList.value : [];
+    const existingLeadsData = existingLeadsResult.status === 'fulfilled' ? existingLeadsResult.value : [];
     const leadByEmail = {};
     existingLeadsData.forEach(lead => { if (lead.email) leadByEmail[lead.email.toLowerCase()] = lead; });
 
-    // Dedup using in-memory Set
     const newMessageIds = messages.map(m => m.id).filter(id => !processedIds.has(id));
 
-    // Step 1: Fetch Gmail message details with concurrency limit + timeout + retry
+    // Step 1: Fetch message details with concurrency limit + AbortController timeout + retry
     const fetchTasks = newMessageIds.map(messageId => async () => {
       const ac = new AbortController();
       abortControllers.push(ac);
@@ -107,12 +129,11 @@ Deno.serve(async (req) => {
     });
 
     const fetchResults = await withConcurrencyLimit(fetchTasks, 10);
-    const fetchedMessages = fetchResults
-      .filter(r => r.status === 'fulfilled' && r.value)
-      .map(r => r.value);
-    const fetchErrors = fetchResults.filter(r => r.status === 'rejected');
-    fetchErrors.forEach(r => console.error('[gmailSync] fetch error:', r.reason));
-    stats.errors += fetchErrors.length;
+    const fetchedMessages = fetchResults.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+    fetchResults.filter(r => r.status === 'rejected').forEach(r => {
+      console.error('[gmailSync] fetch error:', r.reason);
+      stats.errors++;
+    });
 
     // Step 2: Parse messages
     const parsedMessages = fetchedMessages.map(({ messageId, message }) => {
@@ -124,38 +145,34 @@ Deno.serve(async (req) => {
       const fromMatch = from.match(/^(.*?)\s*<(.+?)>$/) || [null, '', from];
       const senderName = fromMatch[1].trim().replace(/^"|"$/g, '');
       const senderEmail = fromMatch[2].trim() || from;
-
       let bodyText = '';
       const extractBody = (part) => {
         if (!part) return;
         if (part.mimeType === 'text/plain' && part.body?.data) {
           try { bodyText += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch (_) {}
-        } else if (part.parts) {
-          part.parts.forEach(extractBody);
-        }
+        } else if (part.parts) { part.parts.forEach(extractBody); }
       };
       extractBody(message.payload);
       if (!bodyText && message.payload?.body?.data) {
         try { bodyText = atob(message.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch (_) {}
       }
-
       return { messageId, subject, dateStr, senderName, senderEmail, bodyText };
     });
 
     // Step 3: Keyword filter
-    const keywordSkipped = parsedMessages.filter(({ subject, bodyText }) => {
-      if (keywords.length === 0) return false;
-      return !keywords.some(kw => (subject + ' ' + bodyText).toLowerCase().includes(kw));
-    });
-    const toProcess = parsedMessages.filter(({ subject, bodyText }) => {
-      if (keywords.length === 0) return true;
-      return keywords.some(kw => (subject + ' ' + bodyText).toLowerCase().includes(kw));
-    });
+    const keywordSkipped = keywords.length > 0
+      ? parsedMessages.filter(({ subject, bodyText }) => !keywords.some(kw => (subject + ' ' + bodyText).toLowerCase().includes(kw)))
+      : [];
+    const toProcess = keywords.length > 0
+      ? parsedMessages.filter(({ subject, bodyText }) => keywords.some(kw => (subject + ' ' + bodyText).toLowerCase().includes(kw)))
+      : parsedMessages;
 
-    // Log keyword-skipped with concurrency limit
-    const skipLogResults = await withConcurrencyLimit(
+    // Log keyword-skipped (workspace-scoped)
+    assertWorkspaceId(workspaceId);
+    const skipResults = await withConcurrencyLimit(
       keywordSkipped.map(({ messageId, subject, dateStr, senderName, senderEmail, bodyText }) => async () => {
         await base44.entities.EmailIngestionLog.create({
+          workspace_id: workspaceId,
           gmail_message_id: messageId, sender_name: senderName, sender_email: senderEmail,
           subject, body_preview: bodyText.slice(0, 500),
           received_at: dateStr ? new Date(dateStr).toISOString() : now.toISOString(),
@@ -164,10 +181,11 @@ Deno.serve(async (req) => {
       }),
       10
     );
-    skipLogResults.filter(r => r.status === 'rejected').forEach(r => console.error('[gmailSync] skip log error:', r.reason));
+    skipResults.filter(r => r.status === 'rejected').forEach(r => console.error('[gmailSync] skip log error:', r.reason));
     stats.skipped += keywordSkipped.length;
 
-    // Step 4: AI extraction with concurrency limit
+    // Step 4: AI extraction + lead creation (workspace-scoped)
+    assertWorkspaceId(workspaceId);
     const processTasks = toProcess.map(({ messageId, subject, dateStr, senderName, senderEmail, bodyText }) => async () => {
       const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: `You are BeaconIQ's lead extraction engine. Analyze the following email and determine whether the sender is a potential B2B lead. Return ONLY a valid JSON object with these exact fields:
@@ -197,6 +215,7 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
       });
 
       const logBase = {
+        workspace_id: workspaceId,
         gmail_message_id: messageId,
         sender_name: senderName, sender_email: senderEmail, subject,
         body_preview: bodyText.slice(0, 500),
@@ -216,7 +235,6 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
         stats.skipped++;
         return;
       }
-
       if (!(aiResult.confidence >= threshold && autoCreate)) {
         await base44.entities.EmailIngestionLog.create({ ...logBase, result: 'pending_review' });
         stats.reviewed++;
@@ -234,10 +252,11 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
         await base44.entities.EmailIngestionLog.create({ ...logBase, result: 'duplicate_updated', lead_id: existingLead.id });
       } else {
         const newLead = await base44.entities.Lead.create({
+          workspace_id: workspaceId,
           name: aiResult.name || senderName || senderEmail,
           email: extractedEmail, company: aiResult.company || '',
           title: aiResult.title || '', phone: aiResult.phone || '',
-          industry: aiResult.industry || '', source: 'Gmail Ingestion',
+          industry: aiResult.industry || '', source: 'Email Ingestion',
           status: 'New', priority: 'Medium', notes: aiResult.email_body_summary || '',
         });
 
@@ -264,7 +283,7 @@ Text: ${scoringText}`,
             }
           });
           const score = scoreResult.intent_score ?? 0;
-          await base44.entities.IntentScore.create({
+          await base44.asServiceRole.entities.IntentScore.create({
             lead_id: newLead.id, intent_score: score,
             urgency_level: scoreResult.urgency_level || 'Low',
             decision_authority: scoreResult.decision_authority || 'Low',
@@ -294,19 +313,14 @@ Text: ${scoringText}`,
     // Cleanup: abort any lingering fetch controllers
     abortControllers.forEach(ac => { try { ac.abort(); } catch (_) {} });
 
-    // Best-effort: flush final sync stats to DB
-    try {
-      const base44 = createClientFromRequest(req);
-      const user = await base44.auth.me();
-      if (user) {
-        const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
-        if (settingsList.length) {
-          await base44.entities.EmailIngestionSettings.update(settingsList[0].id, {
-            last_sync_at: now.toISOString(),
-            is_active: true,
-          });
-        }
-      }
-    } catch (_) {}
+    // Best-effort: flush final sync timestamp to DB
+    if (base44 && configId) {
+      try {
+        await base44.entities.EmailIngestionSettings.update(configId, {
+          last_sync_at: now.toISOString(),
+          is_active: true,
+        });
+      } catch (_) {}
+    }
   }
 });

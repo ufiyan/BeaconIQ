@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
+import { getOrCreateWorkspace } from "@/lib/workspace";
 import { TrendingUp, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,9 @@ export default function Onboarding() {
 
   const handleFinish = async () => {
     setSaving(true);
-    await base44.entities.BusinessProfile.create({ ...form, onboarding_complete: true });
+    const user = await base44.auth.me();
+    const workspace = await getOrCreateWorkspace(user);
+    await base44.entities.BusinessProfile.create({ ...form, onboarding_complete: true, workspace_id: workspace.id });
     setSaving(false);
     navigate("/");
   };
