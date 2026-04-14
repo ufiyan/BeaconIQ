@@ -8,19 +8,11 @@ Deno.serve(async (req) => {
 
     const { workspace_id, month } = await req.json();
 
-    // Resolve workspace if not provided
-    let wsId = workspace_id;
-    if (!wsId) {
-      const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
-      if (!workspaces.length) return Response.json({ error: 'No workspace found' }, { status: 400 });
-      wsId = workspaces[0].id;
-    }
-
-    // Verify ownership
-    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: wsId }, '-created_date', 1);
-    if (!workspaces.length || workspaces[0].owner_user_id !== user.id) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Always resolve workspace by owner — ignore any passed workspace_id to prevent spoofing
+    const ownedWorkspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
+    console.log('[getUsage] user.id:', user.id, '| workspaces found:', ownedWorkspaces.length, '| passed workspace_id:', workspace_id);
+    if (!ownedWorkspaces.length) return Response.json({ error: 'No workspace found' }, { status: 400 });
+    const wsId = ownedWorkspaces[0].id;
 
     const targetMonth = month || new Date().toISOString().slice(0, 7); // "YYYY-MM"
 
