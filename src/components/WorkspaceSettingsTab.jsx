@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
-import { CheckCircle2, Loader2, Save, Users, Mail, Bell } from "lucide-react";
+import { CheckCircle2, Loader2, Save, Users, Mail, Bell, AlertTriangle, Zap } from "lucide-react";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -39,6 +39,7 @@ export default function WorkspaceSettingsTab() {
   const [workspaceName, setWorkspaceName] = useState("");
 
   const [stats, setStats] = useState({ leads: 0, emails: 0, reminders: 0 });
+  const [usage, setUsage] = useState({ emails_processed: 0 });
 
   useEffect(() => {
     loadWorkspace();
@@ -59,11 +60,12 @@ export default function WorkspaceSettingsTab() {
 
     // Load current month's metered usage
     const usageRes = await base44.functions.invoke("getUsage", { workspace_id: workspaces[0]?.id });
-    const usage = usageRes?.data || {};
+    const usageData = usageRes?.data || {};
+    setUsage(usageData);
     setStats({
-      leads: usage.leads_created || 0,
-      emails: usage.emails_processed || 0,
-      reminders: usage.emails_sent || 0,
+      leads: usageData.leads_created || 0,
+      emails: usageData.emails_processed || 0,
+      reminders: usageData.emails_sent || 0,
     });
     setLoading(false);
   };
@@ -142,6 +144,62 @@ export default function WorkspaceSettingsTab() {
           <StatCard icon={Bell} label="Follow-ups Sent" value={stats.reminders} color="text-green-400" />
         </div>
       </div>
+
+      {/* Email Quota Bar */}
+      {(() => {
+        const plan = workspace?.plan || 'free';
+        const limit = workspace?.monthly_email_limit ?? (plan === 'starter' ? 1000 : 100);
+        const used = usage.emails_processed || 0;
+        const isPro = plan === 'pro';
+        const pct = isPro ? 0 : Math.min(100, Math.round((used / limit) * 100));
+        const isWarning = !isPro && pct >= 80;
+        const isOver = !isPro && used >= limit;
+        return (
+          <div className={`bg-card rounded-2xl border p-5 space-y-3 ${isOver ? 'border-red-500/50' : isWarning ? 'border-amber-500/50' : 'border-border'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {isWarning ? <AlertTriangle className="h-4 w-4 text-amber-400" /> : <Mail className="h-4 w-4 text-primary" />}
+                <h3 className="text-sm font-semibold text-white">Monthly Email Quota</h3>
+              </div>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${plan === 'pro' ? 'bg-primary/20 text-primary' : plan === 'starter' ? 'bg-amber-500/20 text-amber-400' : 'bg-secondary text-muted-foreground'}`}>
+                {plan.charAt(0).toUpperCase() + plan.slice(1)}
+              </span>
+            </div>
+            {isPro ? (
+              <p className="text-sm text-muted-foreground">Unlimited emails on the Pro plan.</p>
+            ) : (
+              <>
+                <div className="flex items-end justify-between text-xs text-muted-foreground mb-1">
+                  <span>{used.toLocaleString()} used</span>
+                  <span>{limit.toLocaleString()} limit</span>
+                </div>
+                <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : isWarning ? 'bg-amber-400' : 'bg-primary'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                {isOver && (
+                  <div className="flex items-center justify-between mt-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <p className="text-xs text-red-400">Email limit reached — syncs are paused until next month or you upgrade.</p>
+                    <Button size="sm" className="gap-1.5 ml-3 shrink-0 bg-primary hover:bg-primary/90">
+                      <Zap className="h-3 w-3" /> Upgrade
+                    </Button>
+                  </div>
+                )}
+                {isWarning && !isOver && (
+                  <div className="flex items-center justify-between mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-xs text-amber-400">You've used {pct}% of your monthly quota. Consider upgrading soon.</p>
+                    <Button size="sm" variant="outline" className="gap-1.5 ml-3 shrink-0 border-amber-500/50 text-amber-400 hover:bg-amber-500/10">
+                      <Zap className="h-3 w-3" /> Upgrade
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Workspace Name */}
       <div className="bg-card rounded-2xl border border-border p-6 space-y-4">

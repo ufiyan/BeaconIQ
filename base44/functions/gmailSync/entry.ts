@@ -128,6 +128,26 @@ function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
 }
 
+// Rate limit guard: throws if tenant has exceeded their monthly email limit
+async function checkRateLimit(base44, workspaceId, workspace) {
+  const plan = workspace.plan || 'free';
+  // Pro plan is unlimited
+  if (plan === 'pro') return;
+
+  const limit = workspace.monthly_email_limit ?? (plan === 'starter' ? 1000 : 100);
+  const month = new Date().toISOString().slice(0, 7);
+  const usageRecords = await base44.asServiceRole.entities.WorkspaceUsage.filter(
+    { workspace_id: workspaceId, month }, '-created_date', 1
+  );
+  const used = usageRecords.length > 0 ? (usageRecords[0].emails_processed || 0) : 0;
+
+  if (used >= limit) {
+    const msg = `[gmailSync] Rate limit exceeded for workspace ${workspaceId} — plan: ${plan}, limit: ${limit}, used: ${used}. Skipping sync.`;
+    console.warn(msg);
+    throw Object.assign(new Error(`Monthly email limit reached (${used}/${limit}). Upgrade your plan to process more emails.`), { status: 429 });
+  }
+}
+
 // Middleware guard: verifies the authenticated user owns the workspace (403 on mismatch)
 // Returns the full workspace record so callers can access token fields
 async function validateTenant(base44, workspaceId, userId) {
@@ -200,6 +220,9 @@ Deno.serve(async (req) => {
       console.warn(`[gmailSync] workspace ${workspaceId} has gmail_connected=false — skipping sync`);
       return Response.json({ skipped: true, reason: 'Gmail not connected for this workspace' });
     }
+
+    // Rate limit: check monthly email quota before doing any work
+    await checkRateLimit(base44, workspaceId, workspace);
 
     // Load ingestion settings scoped to workspace
     const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);

@@ -53,6 +53,21 @@
     "ai_model": {
       "type": "string",
       "title": "AI Model"
+    },
+    "plan": {
+      "type": "string",
+      "title": "Plan",
+      "enum": [
+        "free",
+        "starter",
+        "pro"
+      ],
+      "default": "free"
+    },
+    "monthly_email_limit": {
+      "type": "number",
+      "title": "Monthly Email Limit",
+      "default": 100
     }
   },
   "required": [
