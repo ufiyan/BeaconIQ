@@ -31,6 +31,71 @@ async function fetchWithRetry(url, options, retries = 3) {
 const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
 const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
+// --- Per-tenant AI client ---
+// Returns { invokeLLM(prompt, schema) } using the workspace's own key if set,
+// otherwise falls back to the platform default (base44 InvokeLLM integration).
+
+async function callOpenAI(apiKey, model, prompt, schema) {
+  const userContent = schema
+    ? `${prompt}\n\nRespond with a valid JSON object matching this schema: ${JSON.stringify(schema)}`
+    : prompt;
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: userContent }],
+      ...(schema ? { response_format: { type: 'json_object' } } : {}),
+    }),
+  });
+  if (!res.ok) throw new Error(`[aiClient/openai] ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  return schema ? JSON.parse(content) : content;
+}
+
+async function callAnthropic(apiKey, model, prompt, schema) {
+  const userContent = schema
+    ? `${prompt}\n\nRespond with a valid JSON object matching this schema: ${JSON.stringify(schema)}`
+    : prompt;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: 'user', content: userContent }] }),
+  });
+  if (!res.ok) throw new Error(`[aiClient/anthropic] ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const content = data.content?.[0]?.text || '';
+  if (!schema) return content;
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('[aiClient/anthropic] No JSON found in response');
+  return JSON.parse(match[0]);
+}
+
+function getAIClient(workspace, base44) {
+  const hasCustomKey = workspace?.ai_api_key?.trim().length > 0;
+  if (!hasCustomKey) {
+    return {
+      invokeLLM: (prompt, schema) =>
+        base44.asServiceRole.integrations.Core.InvokeLLM({
+          prompt,
+          ...(schema ? { response_json_schema: schema } : {}),
+        }),
+    };
+  }
+  const provider = workspace.ai_provider || 'openai';
+  const apiKey = workspace.ai_api_key;
+  const defaultModels = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022' };
+  const model = workspace.ai_model || defaultModels[provider] || 'gpt-4o';
+  console.log(`[gmailSync] Using tenant AI key — provider: ${provider}, model: ${model}`);
+  return {
+    invokeLLM: (prompt, schema) =>
+      provider === 'anthropic'
+        ? callAnthropic(apiKey, model, prompt, schema)
+        : callOpenAI(apiKey, model, prompt, schema),
+  };
+}
+
 // Guard: throws if workspace_id is missing
 function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
@@ -119,6 +184,9 @@ Deno.serve(async (req) => {
     // Get per-tenant Gmail access token (refresh if expiring within 5 minutes)
     const accessToken = await getWorkspaceAccessToken(base44, workspace);
     const authHeader = { Authorization: `Bearer ${accessToken}` };
+
+    // Build per-tenant AI client (own key if configured, else platform default)
+    const aiClient = getAIClient(workspace, base44);
 
     // Cursor-based sync window — user-scoped client enforces RLS
     const recentLogs = await base44.entities.EmailIngestionLog.filter(
@@ -245,8 +313,8 @@ Deno.serve(async (req) => {
     // Step 4: AI extraction + lead creation (workspace-scoped)
     assertWorkspaceId(workspaceId);
     const processTasks = toProcess.map(({ messageId, subject, dateStr, senderName, senderEmail, bodyText }) => async () => {
-      const aiResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-        prompt: `You are BeaconIQ's lead extraction engine. Analyze the following email and determine whether the sender is a potential B2B lead. Return ONLY a valid JSON object with these exact fields:
+      const aiResult = await aiClient.invokeLLM(
+        `You are BeaconIQ's lead extraction engine. Analyze the following email and determine whether the sender is a potential B2B lead. Return ONLY a valid JSON object with these exact fields:
 is_lead: boolean
 confidence: integer 0-100
 name: string or null
@@ -259,7 +327,7 @@ email_body_summary: one sentence describing what this person is asking about
 not_a_lead_reason: if is_lead is false, one short phrase explaining why
 
 Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. Email body: ${bodyText.slice(0, 3000)}`,
-        response_json_schema: {
+        {
           type: "object",
           properties: {
             is_lead: { type: "boolean" }, confidence: { type: "number" },
@@ -270,7 +338,7 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
           },
           required: ["is_lead", "confidence"]
         }
-      });
+      );
 
       const logBase = {
         workspace_id: workspaceId,
@@ -320,8 +388,8 @@ Sender name: ${senderName}. Sender email: ${senderEmail}. Subject: ${subject}. E
 
         try {
           const scoringText = `Subject: ${subject}\n${bodyText}`.slice(0, 2000);
-          const scoreResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
-            prompt: `You are BeaconIQ's intent scoring engine. Analyze the following B2B lead text. Return ONLY valid JSON:
+          const scoreResult = await aiClient.invokeLLM(
+            `You are BeaconIQ's intent scoring engine. Analyze the following B2B lead text. Return ONLY valid JSON:
 intent_score: integer 0-100
 urgency_level: 'Immediate', 'High', 'Medium', or 'Low'
 decision_authority: 'High', 'Medium', or 'Low'
@@ -330,7 +398,7 @@ urgency_signals: up to 3 phrases as comma-separated string, or null
 scoring_rationale: one sentence
 
 Text: ${scoringText}`,
-            response_json_schema: {
+            {
               type: "object",
               properties: {
                 intent_score: { type: "number" }, urgency_level: { type: "string" },
@@ -339,7 +407,7 @@ Text: ${scoringText}`,
               },
               required: ["intent_score", "urgency_level", "decision_authority"]
             }
-          });
+          );
           const score = scoreResult.intent_score ?? 0;
           await base44.entities.IntentScore.create({
             lead_id: newLead.id, intent_score: score,

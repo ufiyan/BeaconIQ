@@ -30,6 +30,24 @@
     "gmail_email": {
       "type": "string",
       "title": "Connected Gmail Address"
+    },
+    "ai_provider": {
+      "type": "string",
+      "title": "AI Provider",
+      "enum": [
+        "openai",
+        "anthropic",
+        "base44"
+      ],
+      "default": "base44"
+    },
+    "ai_api_key": {
+      "type": "string",
+      "title": "AI API Key"
+    },
+    "ai_model": {
+      "type": "string",
+      "title": "AI Model"
     }
   },
   "required": [
