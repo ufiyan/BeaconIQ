@@ -10,6 +10,11 @@
       "type": "string",
       "title": "Workspace Name"
     },
+    "onboarding_complete": {
+      "type": "boolean",
+      "title": "Onboarding Complete",
+      "default": false
+    },
     "gmail_connected": {
       "type": "boolean",
       "title": "Gmail Connected",

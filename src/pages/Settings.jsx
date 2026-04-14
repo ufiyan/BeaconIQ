@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Save, Loader2 } from "lucide-react";
 import EmailIngestionTab from "../components/EmailIngestionTab";
+import WorkspaceSettingsTab from "../components/WorkspaceSettingsTab";
 import PageHeader from "../components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,8 +81,8 @@ export default function Settings() {
       <PageHeader title="Settings" description="Configure BeaconIQ for your business" />
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-border">
-        {[['profile','Business Profile'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders']].map(([id, label]) => (
+      <div className="flex gap-1 mb-6 border-b border-border flex-wrap">
+        {[['profile','Business Profile'],['workspace','Workspace'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders']].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -183,6 +184,8 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {activeTab === 'workspace' && <WorkspaceSettingsTab />}
 
       {activeTab === 'ingestion' && <EmailIngestionTab />}
 

@@ -1,24 +1,44 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
+import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = useNavigate();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [checkingWorkspace, setCheckingWorkspace] = useState(true);
 
   useEffect(() => {
-    base44.auth.me().then(user => {
-      if (!user) return;
-      base44.entities.BusinessProfile.filter({ created_by: user.email }, '-created_date', 1).then(profiles => {
-        if (profiles.length === 0) navigate('/onboarding');
-      }).catch(() => {});
-    }).catch(() => {});
+    base44.auth.me().then(async user => {
+      if (!user) { setCheckingWorkspace(false); return; }
+      setCurrentUser(user);
+      const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+      if (workspaces.length === 0 || !workspaces[0].onboarding_complete) {
+        setShowOnboarding(true);
+      }
+      setCheckingWorkspace(false);
+    }).catch(() => setCheckingWorkspace(false));
   }, []);
+
+  if (checkingWorkspace) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background font-inter overflow-hidden">
+      {showOnboarding && currentUser && (
+        <WorkspaceOnboardingModal
+          user={currentUser}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
       {/* Mobile overlay */}
       {mobileOpen && (
         <div 
