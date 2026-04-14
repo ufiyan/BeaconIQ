@@ -57,13 +57,14 @@ export default function WorkspaceSettingsTab() {
       setWorkspaceName(ws.name || "");
     }
 
-    // Load stats in parallel
-    const [leads, emails, reminders] = await Promise.all([
-      base44.entities.Lead.filter({ created_by: user.email }, "-created_date", 1000),
-      base44.entities.EmailLog.filter({ created_by: user.email }, "-created_date", 1000),
-      base44.entities.FollowUpReminder.filter({ created_by: user.email }, "-created_date", 1000),
-    ]);
-    setStats({ leads: leads.length, emails: emails.length, reminders: reminders.length });
+    // Load current month's metered usage
+    const usageRes = await base44.functions.invoke("getUsage", { workspace_id: workspaces[0]?.id });
+    const usage = usageRes?.data || {};
+    setStats({
+      leads: usage.leads_created || 0,
+      emails: usage.emails_processed || 0,
+      reminders: usage.emails_sent || 0,
+    });
     setLoading(false);
   };
 

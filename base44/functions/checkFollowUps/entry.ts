@@ -14,6 +14,27 @@ async function withConcurrencyLimit(tasks, limit) {
   return Promise.allSettled(results);
 }
 
+// --- Usage metering ---
+async function incrementUsage(base44, workspaceId, delta) {
+  const month = new Date().toISOString().slice(0, 7);
+  const existing = await base44.asServiceRole.entities.WorkspaceUsage.filter(
+    { workspace_id: workspaceId, month }, '-created_date', 1
+  );
+  if (existing.length) {
+    const rec = existing[0];
+    await base44.asServiceRole.entities.WorkspaceUsage.update(rec.id, {
+      emails_sent:   (rec.emails_sent   || 0) + (delta.emails_sent   || 0),
+      ai_calls_made: (rec.ai_calls_made || 0) + (delta.ai_calls_made || 0),
+    });
+  } else {
+    await base44.asServiceRole.entities.WorkspaceUsage.create({
+      workspace_id: workspaceId, month,
+      emails_sent:   delta.emails_sent   || 0,
+      ai_calls_made: delta.ai_calls_made || 0,
+    });
+  }
+}
+
 // Guard: throws if workspace_id is missing
 function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[checkFollowUps] workspace_id is required — cross-tenant leak prevented');
@@ -144,6 +165,18 @@ Deno.serve(async (req) => {
     const errors = createResults.filter(r => r.status === 'rejected');
     errors.forEach(r => console.error('[checkFollowUps] reminder creation error:', r.reason));
     const created = createResults.filter(r => r.status === 'fulfilled').length;
+
+    // Meter usage: each reminder created counts as an emails_sent + an ai_calls_made
+    if (created > 0) {
+      try {
+        await incrementUsage(base44, workspaceId, {
+          emails_sent: created,
+          ai_calls_made: created,
+        });
+      } catch (usageErr) {
+        console.error('[checkFollowUps] usage metering error:', usageErr.message);
+      }
+    }
 
     return Response.json({ success: true, reminders_created: created, errors: errors.length });
   } catch (error) {

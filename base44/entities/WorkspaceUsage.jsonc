@@ -1,0 +1,50 @@
+{
+  "name": "WorkspaceUsage",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "month": {
+      "type": "string",
+      "title": "Month (YYYY-MM)"
+    },
+    "emails_processed": {
+      "type": "number",
+      "title": "Emails Processed",
+      "default": 0
+    },
+    "leads_created": {
+      "type": "number",
+      "title": "Leads Created",
+      "default": 0
+    },
+    "emails_sent": {
+      "type": "number",
+      "title": "Emails Sent",
+      "default": 0
+    },
+    "ai_calls_made": {
+      "type": "number",
+      "title": "AI Calls Made",
+      "default": 0
+    }
+  },
+  "required": [
+    "workspace_id",
+    "month"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

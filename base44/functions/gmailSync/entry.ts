@@ -96,6 +96,33 @@ function getAIClient(workspace, base44) {
   };
 }
 
+// --- Usage metering ---
+// Atomically upserts the current month's WorkspaceUsage record for the workspace.
+async function incrementUsage(base44, workspaceId, delta) {
+  const month = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+  const existing = await base44.asServiceRole.entities.WorkspaceUsage.filter(
+    { workspace_id: workspaceId, month }, '-created_date', 1
+  );
+  if (existing.length) {
+    const rec = existing[0];
+    await base44.asServiceRole.entities.WorkspaceUsage.update(rec.id, {
+      emails_processed: (rec.emails_processed || 0) + (delta.emails_processed || 0),
+      leads_created:    (rec.leads_created    || 0) + (delta.leads_created    || 0),
+      emails_sent:      (rec.emails_sent      || 0) + (delta.emails_sent      || 0),
+      ai_calls_made:    (rec.ai_calls_made    || 0) + (delta.ai_calls_made    || 0),
+    });
+  } else {
+    await base44.asServiceRole.entities.WorkspaceUsage.create({
+      workspace_id: workspaceId,
+      month,
+      emails_processed: delta.emails_processed || 0,
+      leads_created:    delta.leads_created    || 0,
+      emails_sent:      delta.emails_sent      || 0,
+      ai_calls_made:    delta.ai_calls_made    || 0,
+    });
+  }
+}
+
 // Guard: throws if workspace_id is missing
 function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
@@ -433,6 +460,19 @@ Text: ${scoringText}`,
       console.error('[gmailSync] processing error:', r.reason);
       stats.errors++;
     });
+
+    // Meter usage for this sync run (best-effort, don't fail the sync if this errors)
+    try {
+      // Count AI calls: 1 per processed email (lead extraction) + 1 per lead created (intent scoring)
+      const aiCalls = toProcess.length + stats.created;
+      await incrementUsage(base44, workspaceId, {
+        emails_processed: messages.length,
+        leads_created: stats.created,
+        ai_calls_made: aiCalls,
+      });
+    } catch (usageErr) {
+      console.error('[gmailSync] usage metering error:', usageErr.message);
+    }
 
     return Response.json({ success: true, stats });
   } catch (error) {
