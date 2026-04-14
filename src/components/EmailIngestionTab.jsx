@@ -32,9 +32,12 @@ export default function EmailIngestionTab() {
   const loadAll = async () => {
     setLoading(true);
     const user = await base44.auth.me();
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
+    const settingsFilter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
     const [statusRes, settingsList] = await Promise.all([
       base44.functions.invoke('gmailStatus', {}).catch(() => ({ data: { connected: false, email: null } })),
-      base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1).catch(() => []),
+      base44.entities.EmailIngestionSettings.filter(settingsFilter, '-created_date', 1).catch(() => []),
     ]);
     setGmailStatus(statusRes?.data || { connected: false, email: null });
     if (settingsList.length > 0) {
@@ -58,7 +61,10 @@ export default function EmailIngestionTab() {
       return;
     }
     setSaving(true);
-    const data = { ...form, is_active: !!(gmailStatus?.connected && form.leads_inbox) };
+    const user = await base44.auth.me();
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
+    const data = { ...form, workspace_id: workspaceId, is_active: !!(gmailStatus?.connected && form.leads_inbox) };
     if (settings) {
       await base44.entities.EmailIngestionSettings.update(settings.id, data);
     } else {

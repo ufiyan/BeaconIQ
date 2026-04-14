@@ -2,6 +2,10 @@
   "name": "EmailIngestionSettings",
   "type": "object",
   "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
     "leads_inbox": {
       "type": "string",
       "title": "Leads Inbox Address"

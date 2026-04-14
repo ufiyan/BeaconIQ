@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
     await checkRateLimit(base44, workspaceId, workspace);
 
     // Load ingestion settings scoped to workspace
-    const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
+    const settingsList = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspaceId }, '-created_date', 1);
     if (!settingsList.length) return Response.json({ error: 'No ingestion settings configured' }, { status: 400 });
     const config = settingsList[0];
     configId = config.id;
@@ -487,6 +487,7 @@ Text: ${scoringText}`,
           );
           const score = scoreResult.intent_score ?? 0;
           await base44.entities.IntentScore.create({
+            workspace_id: workspaceId,
             lead_id: newLead.id, intent_score: score,
             urgency_level: scoreResult.urgency_level || 'Low',
             decision_authority: scoreResult.decision_authority || 'Low',

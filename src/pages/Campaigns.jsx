@@ -15,7 +15,10 @@ export default function Campaigns() {
 
   const loadCampaigns = async () => {
     const user = await base44.auth.me();
-    const data = await base44.entities.Campaign.filter({ created_by: user.email }, "-created_date", 50);
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
+    const filter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
+    const data = await base44.entities.Campaign.filter(filter, "-created_date", 50);
     setCampaigns(data);
     setLoading(false);
   };

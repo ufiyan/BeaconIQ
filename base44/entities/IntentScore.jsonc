@@ -2,6 +2,10 @@
   "name": "IntentScore",
   "type": "object",
   "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
     "lead_id": {
       "type": "string",
       "title": "Lead ID"

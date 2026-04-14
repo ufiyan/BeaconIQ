@@ -31,8 +31,11 @@ export default function Settings() {
   const [savingFollowup, setSavingFollowup] = useState(false);
 
   useEffect(() => {
-    base44.auth.me().then(user => {
-    base44.entities.BusinessProfile.filter({ created_by: user.email }, "-created_date", 1).then(data => {
+    base44.auth.me().then(async user => {
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
+    const profileFilter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
+    base44.entities.BusinessProfile.filter(profileFilter, "-created_date", 1).then(data => {
       if (data.length > 0) {
         setProfile(data[0]);
         setForm({
@@ -58,10 +61,13 @@ export default function Settings() {
 
   const handleSave = async () => {
     setSaving(true);
+    const user = await base44.auth.me();
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
     if (profile) {
       await base44.entities.BusinessProfile.update(profile.id, { ...form, onboarding_complete: true });
     } else {
-      const created = await base44.entities.BusinessProfile.create({ ...form, onboarding_complete: true });
+      const created = await base44.entities.BusinessProfile.create({ ...form, workspace_id: workspaceId, onboarding_complete: true });
       setProfile(created);
     }
     toast({ title: "Business profile saved!" });

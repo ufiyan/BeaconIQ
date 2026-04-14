@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,11 +41,44 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   const [workspaceName, setWorkspaceName] = useState(user?.full_name ? `${user.full_name}'s Workspace` : "My Workspace");
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState(null);
+  const [polling, setPolling] = useState(false);
   const [aiProvider, setAiProvider] = useState("base44");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [loading, setLoading] = useState(false);
   const [workspace, setWorkspace] = useState(null);
+  const pollIntervalRef = useRef(null);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    setPolling(false);
+  };
+
+  const startPollingForGmail = (wsId) => {
+    setPolling(true);
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const workspaces = await base44.entities.Workspace.filter({ id: wsId }, '-created_date', 1);
+        const ws = workspaces[0];
+        if (ws?.gmail_connected) {
+          stopPolling();
+          setGmailConnected(true);
+          setGmailEmail(ws.gmail_email || null);
+          setWorkspace(ws);
+        }
+      } catch (_) {}
+    }, 3000);
+  };
 
   // Step 1: Create or reuse workspace
   const handleCreateWorkspace = async () => {
@@ -54,7 +87,7 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     const existing = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
     let ws;
     if (existing.length > 0) {
-      ws = await base44.entities.Workspace.update(existing[0].id, { name: workspaceName.trim() });
+      await base44.entities.Workspace.update(existing[0].id, { name: workspaceName.trim() });
       ws = { ...existing[0], name: workspaceName.trim() };
     } else {
       ws = await base44.entities.Workspace.create({
@@ -69,21 +102,26 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     setStep(2);
   };
 
-  // Step 2: Trigger Gmail OAuth (opens popup, listens for postMessage from /oauth/callback)
+  // Step 2: Trigger Gmail OAuth — opens popup, starts postMessage listener + polling
   const handleConnectGmail = () => {
     if (!workspace) return;
     const url = getGmailOAuthUrl(workspace.id);
     window.open(url, "_blank", "width=500,height=650");
 
+    // Listen for postMessage (fast path)
     const onMessage = (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === "GMAIL_CONNECTED") {
         window.removeEventListener("message", onMessage);
+        stopPolling();
         setGmailEmail(event.data.gmail_email || null);
         setGmailConnected(true);
       }
     };
     window.addEventListener("message", onMessage);
+
+    // Also start DB polling (reliable fallback)
+    startPollingForGmail(workspace.id);
   };
 
   // Step 3: Save AI config
@@ -184,30 +222,43 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={handleConnectGmail}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-800 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin text-gray-600" /> : (
-                    <svg className="h-5 w-5" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
+                <>
+                  <button
+                    onClick={handleConnectGmail}
+                    disabled={loading || polling}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white text-gray-800 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    {(loading || polling) ? <Loader2 className="h-4 w-4 animate-spin text-gray-600" /> : (
+                      <svg className="h-5 w-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                    )}
+                    {polling ? "Waiting for authorization..." : "Sign in with Google"}
+                  </button>
+                  {polling && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      Complete sign-in in the popup window — this page will update automatically.
+                    </p>
                   )}
-                  Sign in with Google
-                </button>
+                </>
               )}
               <div className="flex gap-3">
                 {!gmailConnected && (
-                  <Button variant="ghost" onClick={() => setStep(3)} className="flex-1 text-muted-foreground">
+                  <Button variant="ghost" onClick={() => { stopPolling(); setStep(3); }} className="flex-1 text-muted-foreground">
                     Skip for now
                   </Button>
                 )}
-                <Button onClick={() => setStep(3)} disabled={loading} className={gmailConnected ? "w-full gap-2" : "flex-1 gap-2"}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                <Button
+                  onClick={() => { stopPolling(); setStep(3); }}
+                  disabled={!gmailConnected && polling}
+                  className={gmailConnected ? "w-full gap-2" : "flex-1 gap-2"}
+                >
+                  {polling && !gmailConnected
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <ArrowRight className="h-4 w-4" />}
                   Continue
                 </Button>
               </div>

@@ -35,7 +35,11 @@ export default function CreateCampaignDialog({ open, onClose, onSuccess }) {
     e.preventDefault();
     if (!name) return;
     setSaving(true);
+    const user2 = await base44.auth.me();
+    const workspaces2 = await base44.entities.Workspace.filter({ owner_user_id: user2.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces2[0]?.id;
     await base44.entities.Campaign.create({
+      workspace_id: workspaceId,
       name,
       description,
       steps,
