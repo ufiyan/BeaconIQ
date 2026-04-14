@@ -8,9 +8,13 @@ Deno.serve(async (req) => {
 
     const { workspace_id, month } = await req.json();
 
-    // Always resolve workspace by owner — ignore any passed workspace_id to prevent spoofing
-    const ownedWorkspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
-    console.log('[getUsage] user.id:', user.id, '| workspaces found:', ownedWorkspaces.length, '| passed workspace_id:', workspace_id);
+    // Resolve workspace — try owner_user_id first, fall back to created_by (email)
+    console.log('[getUsage] user:', JSON.stringify({ id: user.id, email: user.email }));
+    let ownedWorkspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
+    if (!ownedWorkspaces.length) {
+      ownedWorkspaces = await base44.asServiceRole.entities.Workspace.filter({ created_by: user.email }, '-created_date', 1);
+    }
+    console.log('[getUsage] workspaces found:', ownedWorkspaces.length);
     if (!ownedWorkspaces.length) return Response.json({ error: 'No workspace found' }, { status: 400 });
     const wsId = ownedWorkspaces[0].id;
 

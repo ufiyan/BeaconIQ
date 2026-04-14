@@ -86,8 +86,12 @@ export default function WorkspaceSettingsTab() {
       setAiApiKey(ws.ai_api_key || "");
       setAiModel(ws.ai_model || "");
     }
-    const usageRes = await base44.functions.invoke("getUsage", { workspace_id: workspaces[0]?.id });
-    setUsage(usageRes?.data || {});
+    try {
+      const usageRes = await base44.functions.invoke("getUsage", { workspace_id: workspaces[0]?.id });
+      setUsage(usageRes?.data || {});
+    } catch (_) {
+      setUsage({});
+    }
     setLoading(false);
   };
 
