@@ -15,6 +15,7 @@ import Settings from './pages/Settings';
 import Onboarding from './pages/Onboarding';
 import EmailIngestion from './pages/EmailIngestion';
 import ReviewQueue from './pages/ReviewQueue';
+import OAuthCallback from './pages/OAuthCallback';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -43,6 +44,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/leads" element={<Leads />} />

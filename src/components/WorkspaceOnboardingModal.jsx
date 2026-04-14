@@ -8,13 +8,14 @@ import { CheckCircle2, Loader2, Mail, Sparkles, Building2, ArrowRight } from "lu
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ].join(" ");
 
 const GMAIL_REDIRECT_URI = "https://app.base44.com/oauth/callback";
 
-function getGmailOAuthUrl() {
+function getGmailOAuthUrl(workspaceId) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
   const params = new URLSearchParams({
     client_id: clientId,
@@ -23,7 +24,7 @@ function getGmailOAuthUrl() {
     scope: GMAIL_SCOPES,
     access_type: "offline",
     prompt: "consent",
-    state: "onboarding",
+    state: workspaceId || "onboarding",
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
@@ -68,38 +69,21 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     setStep(2);
   };
 
-  // Step 2: Trigger Gmail OAuth (opens popup)
+  // Step 2: Trigger Gmail OAuth (opens popup, listens for postMessage from /oauth/callback)
   const handleConnectGmail = () => {
-    const url = getGmailOAuthUrl();
-    const popup = window.open(url, "_blank", "width=500,height=650");
-    // Poll for the OAuth code coming back via the URL
-    const timer = setInterval(async () => {
-      try {
-        if (!popup || popup.closed) {
-          clearInterval(timer);
-          return;
-        }
-        const popupUrl = popup.location.href;
-        if (popupUrl && popupUrl.includes("code=") && popupUrl.includes("state=onboarding")) {
-          clearInterval(timer);
-          popup.close();
-          const params = new URL(popupUrl).searchParams;
-          const code = params.get("code");
-          if (code) {
-            setLoading(true);
-            const res = await base44.functions.invoke("connectGmail", {
-            code,
-            redirect_uri: GMAIL_REDIRECT_URI,
-            });
-            setGmailEmail(res.data?.gmail_email || null);
-            setGmailConnected(true);
-            setLoading(false);
-          }
-        }
-      } catch (_e) {
-        // Cross-origin errors are expected until redirect completes
+    if (!workspace) return;
+    const url = getGmailOAuthUrl(workspace.id);
+    window.open(url, "_blank", "width=500,height=650");
+
+    const onMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "GMAIL_CONNECTED") {
+        window.removeEventListener("message", onMessage);
+        setGmailEmail(event.data.gmail_email || null);
+        setGmailConnected(true);
       }
-    }, 500);
+    };
+    window.addEventListener("message", onMessage);
   };
 
   // Step 3: Save AI config
