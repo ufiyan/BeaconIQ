@@ -47,6 +47,27 @@
     "last_sync_stats": {
       "type": "string",
       "title": "Last Sync Stats (JSON)"
+    },
+    "gmail_access_token": {
+      "type": "string",
+      "title": "Gmail Access Token"
+    },
+    "gmail_refresh_token": {
+      "type": "string",
+      "title": "Gmail Refresh Token"
+    },
+    "gmail_token_expiry": {
+      "type": "number",
+      "title": "Gmail Token Expiry"
+    },
+    "gmail_email": {
+      "type": "string",
+      "title": "Gmail Email"
+    },
+    "gmail_connected": {
+      "type": "boolean",
+      "title": "Gmail Connected",
+      "default": false
     }
   },
   "required": [],

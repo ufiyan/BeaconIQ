@@ -159,15 +159,15 @@ async function validateTenant(base44, workspaceId, userId) {
   return workspaces[0];
 }
 
-// Refresh the workspace's access token using its refresh token; updates the DB record
-async function refreshAccessToken(base44, workspace) {
+// Refresh the settings' access token using its refresh token; updates the EmailIngestionSettings record
+async function refreshAccessToken(base44, settings) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: GOOGLE_CLIENT_ID,
       client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: workspace.gmail_refresh_token,
+      refresh_token: settings.gmail_refresh_token,
       grant_type: 'refresh_token',
     }),
   });
@@ -175,24 +175,22 @@ async function refreshAccessToken(base44, workspace) {
   if (!res.ok || !data.access_token) {
     throw new Error(`[gmailSync] Token refresh failed: ${data.error_description || data.error || 'unknown'}`);
   }
-  const newExpiry = Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600);
-  await base44.entities.Workspace.update(workspace.id, {
+  const newExpiry = Date.now() + (data.expires_in ?? 3600) * 1000;
+  await base44.asServiceRole.entities.EmailIngestionSettings.update(settings.id, {
     gmail_access_token: data.access_token,
     gmail_token_expiry: newExpiry,
   });
   return data.access_token;
 }
 
-// Returns a valid access token for the workspace, refreshing if needed
-async function getWorkspaceAccessToken(base44, workspace) {
-  const FIVE_MINUTES = 5 * 60;
-  const nowSecs = Math.floor(Date.now() / 1000);
-  const expiresIn = (workspace.gmail_token_expiry ?? 0) - nowSecs;
-  if (expiresIn <= FIVE_MINUTES) {
+// Returns a valid access token from EmailIngestionSettings, refreshing if expiring within 5 minutes
+async function getValidAccessToken(settings, base44) {
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+  if ((settings.gmail_token_expiry ?? 0) - Date.now() <= FIVE_MINUTES_MS) {
     console.log('[gmailSync] Token expiring soon — refreshing...');
-    return await refreshAccessToken(base44, workspace);
+    return await refreshAccessToken(base44, settings);
   }
-  return workspace.gmail_access_token;
+  return settings.gmail_access_token;
 }
 
 Deno.serve(async (req) => {
@@ -230,36 +228,22 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'Gmail not connected for this workspace' });
     }
 
-    // Token refresh guard: refresh if expiring within 5 minutes
-    const FIVE_MINUTES_SECS = 5 * 60;
-    const nowSecs = Math.floor(Date.now() / 1000);
-    if ((workspace.gmail_token_expiry ?? 0) - nowSecs <= FIVE_MINUTES_SECS) {
-      console.log(`[gmailSync] Token expiring soon for workspace ${workspaceId} — refreshing before sync`);
-      try {
-        const freshToken = await refreshAccessToken(base44, workspace);
-        // Reload workspace with updated token
-        const refreshed = await base44.asServiceRole.entities.Workspace.filter({ id: workspaceId }, '-created_date', 1);
-        workspace = refreshed[0] || workspace;
-        workspace.gmail_access_token = freshToken;
-      } catch (refreshErr) {
-        console.warn(`[gmailSync] Token refresh failed for workspace ${workspaceId} — marking gmail_connected=false: ${refreshErr.message}`);
-        await base44.asServiceRole.entities.Workspace.update(workspaceId, { gmail_connected: false });
-        return Response.json({ skipped: true, reason: 'Gmail token refresh failed — please reconnect Gmail' });
-      }
-    }
-
     // Rate limit: check monthly email quota before doing any work
     await checkRateLimit(base44, workspaceId, workspace);
 
     // Load ingestion settings scoped to workspace
-    const settingsList = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspaceId }, '-created_date', 1);
+    const settingsList = await base44.asServiceRole.entities.EmailIngestionSettings.filter({ workspace_id: workspaceId }, '-created_date', 1);
     if (!settingsList.length) return Response.json({ error: 'No ingestion settings configured' }, { status: 400 });
     const config = settingsList[0];
     configId = config.id;
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
-    // Access token is already valid (checked/refreshed above)
-    const accessToken = workspace.gmail_access_token;
+    // Get valid per-tenant access token from EmailIngestionSettings (auto-refreshes if needed)
+    console.log('[gmailSync] Fetching valid access token from EmailIngestionSettings...');
+    const accessToken = await getValidAccessToken(config, base44);
+    if (!accessToken) {
+      return Response.json({ skipped: true, reason: 'No Gmail access token in EmailIngestionSettings — please reconnect Gmail' });
+    }
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
     // Build per-tenant AI client (own key if configured, else platform default)
