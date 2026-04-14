@@ -201,6 +201,7 @@ Deno.serve(async (req) => {
   let base44 = null;
   let workspaceId = null;
   let configId = null;
+  let lockAcquired = false;
 
   try {
     base44 = createClientFromRequest(req);
@@ -210,15 +211,41 @@ Deno.serve(async (req) => {
     // Resolve workspace and validate tenant ownership
     const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
     if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
-    const workspace = workspaces[0];
+    let workspace = workspaces[0];
     workspaceId = workspace.id;
     assertWorkspaceId(workspaceId);
     await validateTenant(base44, workspaceId, user.id);
+
+    // Sync lock guard: prevent concurrent syncs for the same workspace
+    if (workspace.sync_lock) {
+      console.warn(`[gmailSync] workspace ${workspaceId} is already syncing — aborting duplicate run`);
+      return Response.json({ skipped: true, reason: 'Sync already in progress for this workspace' });
+    }
+    await base44.asServiceRole.entities.Workspace.update(workspaceId, { sync_lock: true });
+    lockAcquired = true;
 
     // Skip sync if Gmail not connected for this workspace
     if (!workspace.gmail_connected) {
       console.warn(`[gmailSync] workspace ${workspaceId} has gmail_connected=false — skipping sync`);
       return Response.json({ skipped: true, reason: 'Gmail not connected for this workspace' });
+    }
+
+    // Token refresh guard: refresh if expiring within 5 minutes
+    const FIVE_MINUTES_SECS = 5 * 60;
+    const nowSecs = Math.floor(Date.now() / 1000);
+    if ((workspace.gmail_token_expiry ?? 0) - nowSecs <= FIVE_MINUTES_SECS) {
+      console.log(`[gmailSync] Token expiring soon for workspace ${workspaceId} — refreshing before sync`);
+      try {
+        const freshToken = await refreshAccessToken(base44, workspace);
+        // Reload workspace with updated token
+        const refreshed = await base44.asServiceRole.entities.Workspace.filter({ id: workspaceId }, '-created_date', 1);
+        workspace = refreshed[0] || workspace;
+        workspace.gmail_access_token = freshToken;
+      } catch (refreshErr) {
+        console.warn(`[gmailSync] Token refresh failed for workspace ${workspaceId} — marking gmail_connected=false: ${refreshErr.message}`);
+        await base44.asServiceRole.entities.Workspace.update(workspaceId, { gmail_connected: false });
+        return Response.json({ skipped: true, reason: 'Gmail token refresh failed — please reconnect Gmail' });
+      }
     }
 
     // Rate limit: check monthly email quota before doing any work
@@ -231,8 +258,8 @@ Deno.serve(async (req) => {
     configId = config.id;
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
-    // Get per-tenant Gmail access token (refresh if expiring within 5 minutes)
-    const accessToken = await getWorkspaceAccessToken(base44, workspace);
+    // Access token is already valid (checked/refreshed above)
+    const accessToken = workspace.gmail_access_token;
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
     // Build per-tenant AI client (own key if configured, else platform default)
@@ -504,6 +531,13 @@ Text: ${scoringText}`,
   } finally {
     // Cleanup: abort any lingering fetch controllers
     abortControllers.forEach(ac => { try { ac.abort(); } catch (_) {} });
+
+    // Release sync lock
+    if (base44 && workspaceId && lockAcquired) {
+      try {
+        await base44.asServiceRole.entities.Workspace.update(workspaceId, { sync_lock: false });
+      } catch (_) {}
+    }
 
     // Best-effort: flush final sync timestamp to DB
     if (base44 && configId) {
