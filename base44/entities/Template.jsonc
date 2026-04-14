@@ -1,0 +1,55 @@
+{
+  "name": "Template",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Template Name"
+    },
+    "subject": {
+      "type": "string",
+      "title": "Email Subject"
+    },
+    "body": {
+      "type": "string",
+      "title": "Email Body"
+    },
+    "intent_range_min": {
+      "type": "number",
+      "title": "Intent Score Min",
+      "default": 0
+    },
+    "intent_range_max": {
+      "type": "number",
+      "title": "Intent Score Max",
+      "default": 100
+    },
+    "use_count": {
+      "type": "number",
+      "title": "Use Count",
+      "default": 0
+    }
+  },
+  "required": [
+    "workspace_id",
+    "name",
+    "subject",
+    "body"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

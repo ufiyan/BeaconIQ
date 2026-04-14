@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest } from "lucide-react";
+import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest, FileText } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useState, useEffect } from "react";
@@ -9,6 +9,7 @@ const navItems = [
   { label: "Leads", icon: Users, path: "/leads" },
   { label: "Campaigns", icon: Zap, path: "/campaigns" },
   { label: "Email Log", icon: Mail, path: "/emails" },
+  { label: "Templates", icon: FileText, path: "/templates" },
   { label: "Sync Log", icon: Inbox, path: "/email-ingestion" },
   { label: "Review Queue", icon: GitPullRequest, path: "/review-queue" },
   { label: "Settings", icon: Settings, path: "/settings" },

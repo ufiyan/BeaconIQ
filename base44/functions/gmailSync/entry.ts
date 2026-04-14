@@ -496,6 +496,64 @@ Text: ${scoringText}`,
             scored_at: now.toISOString(), source_text: scoringText,
           });
           await base44.entities.Lead.update(newLead.id, { priority: score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low' });
+
+          // Template-based reply email generation
+          try {
+            const allTemplates = await base44.entities.Template.filter({ workspace_id: workspaceId }, '-created_date', 100);
+            const matchingTemplate = allTemplates.find(t =>
+              score >= (t.intent_range_min ?? 0) && score <= (t.intent_range_max ?? 100)
+            );
+
+            let emailSubject, emailBody;
+            if (matchingTemplate) {
+              // Use template as base and personalize with AI
+              const personalized = await aiClient.invokeLLM(
+                `You are BeaconIQ's email personalization engine. Personalize the following email template for a specific lead. Keep the structure and intent of the template, but tailor it to feel personal and relevant to this lead.
+
+Lead name: ${aiResult.name || senderName}
+Lead company: ${aiResult.company || 'unknown'}
+Lead title: ${aiResult.title || 'unknown'}
+Lead email summary: ${aiResult.email_body_summary || subject}
+
+Template subject: ${matchingTemplate.subject}
+Template body (HTML): ${matchingTemplate.body}
+
+Return ONLY valid JSON with keys: subject (string), body (string, preserve HTML structure from template).`,
+                { type: "object", properties: { subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] }
+              );
+              emailSubject = personalized.subject || matchingTemplate.subject;
+              emailBody = personalized.body || matchingTemplate.body;
+              // Increment template use_count
+              await base44.entities.Template.update(matchingTemplate.id, { use_count: (matchingTemplate.use_count || 0) + 1 });
+            } else {
+              // Default AI generation (no matching template)
+              const generated = await aiClient.invokeLLM(
+                `Generate a personalized outreach reply email for this lead.
+Lead name: ${aiResult.name || senderName}, company: ${aiResult.company || 'unknown'}, title: ${aiResult.title || 'unknown'}.
+Their inquiry: ${aiResult.email_body_summary || subject}.
+Intent score: ${score}/100. Keep it concise, friendly, and professional.
+Return ONLY valid JSON with keys: subject (string), body (string).`,
+                { type: "object", properties: { subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] }
+              );
+              emailSubject = generated.subject || `Re: ${subject}`;
+              emailBody = generated.body || '';
+            }
+
+            if (emailSubject && emailBody) {
+              await base44.entities.EmailLog.create({
+                workspace_id: workspaceId,
+                lead_id: newLead.id,
+                lead_name: aiResult.name || senderName,
+                lead_email: extractedEmail,
+                subject: emailSubject,
+                body: emailBody,
+                status: 'Draft',
+                ai_generated: true,
+              });
+            }
+          } catch (emailErr) {
+            console.error('[gmailSync] email generation error:', emailErr?.message);
+          }
         } catch (err) {
           console.error('[gmailSync] intent scoring error:', err?.message);
         }
