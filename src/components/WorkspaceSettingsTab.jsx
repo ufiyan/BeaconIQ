@@ -10,26 +10,18 @@ import {
   AlertTriangle, BrainCircuit, RefreshCw, WifiOff
 } from "lucide-react";
 
-const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/userinfo.email",
-  "openid",
-].join(" ");
-
-const REDIRECT_URI = "https://app.base44.com/oauth/callback";
+const GOOGLE_CLIENT_ID = "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
 
 function getOAuthUrl(workspaceId) {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-  return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: REDIRECT_URI,
+  return `https://accounts.google.com/o/oauth2/auth?` + new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: "https://app.base44.com/oauth/callback",
     response_type: "code",
-    scope: GMAIL_SCOPES,
+    scope: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email",
     access_type: "offline",
     prompt: "consent",
-    state: workspaceId || "settings",
-  })}`;
+    state: workspaceId,
+  });
 }
 
 function SectionCard({ title, children }) {
