@@ -47,18 +47,41 @@ Deno.serve(async (req) => {
     const gmailEmail = userInfo.email;
     console.log('[connectGmail] Step 4 - Userinfo fetch status:', userInfoRes.status, '| email:', gmailEmail, '| error:', userInfo.error || null);
 
-    // Find workspace and update
-    console.log('[connectGmail] Step 5 - Looking up workspace for user.id:', user.id);
-    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
-    console.log('[connectGmail] Step 6 - Workspaces found:', workspaces.length, workspaces[0] ? '| workspace id: ' + workspaces[0].id : '');
-    if (!workspaces.length) return Response.json({ success: false, error: 'No workspace found' }, { status: 404 });
+    // Find workspace — try owner_user_id first, then created_by, then auto-create
+    console.log('[connectGmail] Step 5 - Looking up workspace | user.id:', user.id, '| user.email:', user.email);
 
-    const tokenExpiry = Math.floor(Date.now() / 1000) + (tokenData.expires_in ?? 3600);
+    let workspace = null;
 
-    console.log('[connectGmail] Step 7 - Updating workspace:', workspaces[0].id, '| gmail_email:', gmailEmail, '| token_expiry:', tokenExpiry);
-    await base44.asServiceRole.entities.Workspace.update(workspaces[0].id, {
+    // Strategy 1: owner_user_id
+    const byOwnerId = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
+    console.log('[connectGmail] Step 6a - By owner_user_id:', byOwnerId.length);
+    if (byOwnerId.length) {
+      workspace = byOwnerId[0];
+    }
+
+    // Strategy 2: created_by email
+    if (!workspace) {
+      const byEmail = await base44.asServiceRole.entities.Workspace.filter({ created_by: user.email }, '-created_date', 1);
+      console.log('[connectGmail] Step 6b - By created_by email:', byEmail.length);
+      if (byEmail.length) workspace = byEmail[0];
+    }
+
+    // Strategy 3: auto-create workspace
+    if (!workspace) {
+      console.log('[connectGmail] Step 6c - No workspace found, auto-creating...');
+      workspace = await base44.asServiceRole.entities.Workspace.create({
+        owner_user_id: user.id,
+        name: user.full_name ? `${user.full_name}'s Workspace` : 'My Workspace',
+      });
+      console.log('[connectGmail] Step 6c - Workspace created:', workspace.id);
+    }
+
+    const tokenExpiry = Date.now() + 3600000;
+
+    console.log('[connectGmail] Step 7 - Updating workspace:', workspace.id, '| gmail_email:', gmailEmail, '| token_expiry:', tokenExpiry);
+    await base44.asServiceRole.entities.Workspace.update(workspace.id, {
       gmail_access_token: tokenData.access_token,
-      gmail_refresh_token: tokenData.refresh_token || workspaces[0].gmail_refresh_token,
+      gmail_refresh_token: tokenData.refresh_token || workspace.gmail_refresh_token,
       gmail_token_expiry: tokenExpiry,
       gmail_email: gmailEmail,
       gmail_connected: true,
