@@ -12,12 +12,13 @@ const GMAIL_SCOPES = [
   "openid",
 ].join(" ");
 
+const GMAIL_REDIRECT_URI = "https://app.base44.com/oauth/callback";
+
 function getGmailOAuthUrl() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-  const redirectUri = `${window.location.origin}/settings`;
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: GMAIL_REDIRECT_URI,
     response_type: "code",
     scope: GMAIL_SCOPES,
     access_type: "offline",
@@ -45,16 +46,23 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   const [loading, setLoading] = useState(false);
   const [workspace, setWorkspace] = useState(null);
 
-  // Step 1: Create workspace
+  // Step 1: Create or reuse workspace
   const handleCreateWorkspace = async () => {
     if (!workspaceName.trim()) return;
     setLoading(true);
-    const ws = await base44.entities.Workspace.create({
-      owner_user_id: user.id,
-      name: workspaceName.trim(),
-      gmail_connected: false,
-      ai_provider: "base44",
-    });
+    const existing = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    let ws;
+    if (existing.length > 0) {
+      ws = await base44.entities.Workspace.update(existing[0].id, { name: workspaceName.trim() });
+      ws = { ...existing[0], name: workspaceName.trim() };
+    } else {
+      ws = await base44.entities.Workspace.create({
+        owner_user_id: user.id,
+        name: workspaceName.trim(),
+        gmail_connected: false,
+        ai_provider: "base44",
+      });
+    }
     setWorkspace(ws);
     setLoading(false);
     setStep(2);
@@ -80,8 +88,8 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
           if (code) {
             setLoading(true);
             const res = await base44.functions.invoke("connectGmail", {
-              code,
-              redirect_uri: `${window.location.origin}/settings`,
+            code,
+            redirect_uri: GMAIL_REDIRECT_URI,
             });
             setGmailEmail(res.data?.gmail_email || null);
             setGmailConnected(true);
