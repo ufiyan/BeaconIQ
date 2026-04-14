@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2, Clock, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -24,6 +25,7 @@ function initials(name) {
 }
 
 export default function Dashboard() {
+  const { workspace, isLoading: workspaceLoading } = useWorkspace();
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [emails, setEmails] = useState([]);
@@ -35,17 +37,18 @@ export default function Dashboard() {
   const [reminders, setReminders] = useState([]);
 
   useEffect(() => {
+    if (workspaceLoading || !workspace) return;
     async function load() {
       const user = await base44.auth.me();
-      const uf = { created_by: user.email };
+      const wf = { workspace_id: workspace.id };
       const [l, c, e, s, isl, ill, rem] = await Promise.all([
-        base44.entities.Lead.filter(uf, "-created_date", 100),
-        base44.entities.Campaign.filter(uf, "-created_date", 10),
-        base44.entities.EmailLog.filter(uf, "-created_date", 20),
-        base44.entities.IntentScore.filter(uf, "-intent_score", 20),
-        base44.entities.EmailIngestionSettings.filter(uf, "-created_date", 1).catch(() => []),
-        base44.entities.EmailIngestionLog.filter(uf, "-created_date", 5).catch(() => []),
-        base44.entities.FollowUpReminder.filter({ user_email: user.email, status: "pending" }, "-due_date", 20).catch(() => []),
+        base44.entities.Lead.filter(wf, "-created_date", 100),
+        base44.entities.Campaign.filter(wf, "-created_date", 10),
+        base44.entities.EmailLog.filter(wf, "-created_date", 20),
+        base44.entities.IntentScore.filter({ created_by: user.email }, "-intent_score", 20),
+        base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, "-created_date", 1).catch(() => []),
+        base44.entities.EmailIngestionLog.filter(wf, "-created_date", 5).catch(() => []),
+        base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-due_date", 20).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);
@@ -57,9 +60,9 @@ export default function Dashboard() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [workspace, workspaceLoading]);
 
-  if (loading) {
+  if (workspaceLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Link } from "react-router-dom";
 import { Users, Plus, Upload, Search, Clock } from "lucide-react";
@@ -30,6 +31,7 @@ function initials(name) {
 }
 
 export default function Leads() {
+  const { workspace, isLoading: workspaceLoading } = useWorkspace();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -42,12 +44,12 @@ export default function Leads() {
   const [reminderLeadIds, setReminderLeadIds] = useState(new Set());
 
   const loadLeads = async () => {
-    const user = await base44.auth.me();
-    const uf = { created_by: user.email };
+    if (!workspace) return;
+    const wf = { workspace_id: workspace.id };
     const [data, scores, reminders] = await Promise.all([
-      base44.entities.Lead.filter(uf, "-created_date", 200),
-      base44.entities.IntentScore.filter(uf, "-scored_at", 500),
-      base44.entities.FollowUpReminder.filter({ user_email: user.email, status: "pending" }, "-created_date", 500).catch(() => []),
+      base44.entities.Lead.filter(wf, "-created_date", 200),
+      base44.entities.IntentScore.filter(wf, "-scored_at", 500),
+      base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-created_date", 500).catch(() => []),
     ]);
     setLeads(data);
     const scoreMap = {};
@@ -57,7 +59,7 @@ export default function Leads() {
     setLoading(false);
   };
 
-  useEffect(() => { loadLeads(); }, []);
+  useEffect(() => { if (!workspaceLoading) loadLeads(); }, [workspace, workspaceLoading]);
 
   const filtered = leads.filter(l => {
     const matchSearch = !search ||
@@ -73,7 +75,7 @@ export default function Leads() {
     return new Date(b.created_date) - new Date(a.created_date);
   });
 
-  if (loading) {
+  if (workspaceLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />

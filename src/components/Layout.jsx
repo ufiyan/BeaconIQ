@@ -4,24 +4,26 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Menu } from "lucide-react";
 import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [checkingWorkspace, setCheckingWorkspace] = useState(true);
+  const { workspace, isLoading: checkingWorkspace, refreshWorkspace } = useWorkspace();
 
   useEffect(() => {
-    base44.auth.me().then(async user => {
-      if (!user) { setCheckingWorkspace(false); return; }
+    base44.auth.me().then(user => {
+      if (!user) return;
       setCurrentUser(user);
-      const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-      if (workspaces.length === 0 || !workspaces[0].onboarding_complete) {
-        setShowOnboarding(true);
-      }
-      setCheckingWorkspace(false);
-    }).catch(() => setCheckingWorkspace(false));
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!checkingWorkspace) {
+      setShowOnboarding(!workspace?.onboarding_complete);
+    }
+  }, [checkingWorkspace, workspace]);
 
   if (checkingWorkspace) {
     return (
@@ -36,7 +38,7 @@ export default function Layout() {
       {showOnboarding && currentUser && (
         <WorkspaceOnboardingModal
           user={currentUser}
-          onComplete={() => setShowOnboarding(false)}
+          onComplete={() => { setShowOnboarding(false); refreshWorkspace(); }}
         />
       )}
       {/* Mobile overlay */}

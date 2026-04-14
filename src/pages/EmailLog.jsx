@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Mail } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -7,18 +8,19 @@ import EmptyState from "../components/EmptyState";
 import moment from "moment";
 
 export default function EmailLog() {
+  const { workspace, isLoading: workspaceLoading } = useWorkspace();
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    base44.auth.me().then(user => {
-    base44.entities.EmailLog.filter({ created_by: user.email }, "-created_date", 100).then(data => {
+    if (workspaceLoading || !workspace) return;
+    base44.entities.EmailLog.filter({ workspace_id: workspace.id }, "-created_date", 100).then(data => {
       setEmails(data);
       setLoading(false);
-    }); });
-  }, []);
+    });
+  }, [workspace, workspaceLoading]);
 
-  if (loading) {
+  if (workspaceLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
