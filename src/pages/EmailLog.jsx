@@ -5,6 +5,7 @@ import { Mail } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
+import { SkeletonTable } from "../components/SkeletonTable";
 import moment from "moment";
 
 export default function EmailLog() {
@@ -22,8 +23,8 @@ export default function EmailLog() {
 
   if (workspaceLoading || loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <SkeletonTable rows={6} cols={4} />
       </div>
     );
   }

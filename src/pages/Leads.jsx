@@ -8,11 +8,13 @@ import KanbanBoard from "../components/KanbanBoard";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
+import { SkeletonTable } from "../components/SkeletonTable";
 import AddLeadDialog from "../components/AddLeadDialog";
 import ImportLeadsDialog from "../components/ImportLeadsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
 const PRIORITY_DOTS = {
@@ -33,6 +35,7 @@ function initials(name) {
 
 export default function Leads() {
   const { workspace, isLoading: workspaceLoading } = useWorkspace();
+  const { toast } = useToast();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -47,17 +50,22 @@ export default function Leads() {
   const loadLeads = async () => {
     if (!workspace) return;
     const wf = { workspace_id: workspace.id };
-    const [data, scores, reminders] = await Promise.all([
-      base44.entities.Lead.filter(wf, "-created_date", 200),
-      base44.entities.IntentScore.filter(wf, "-scored_at", 500),
-      base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-created_date", 500).catch(() => []),
-    ]);
-    setLeads(data);
-    const scoreMap = {};
-    for (const s of scores) { scoreMap[s.lead_id] = s.intent_score; }
-    setIntentScores(scoreMap);
-    setReminderLeadIds(new Set(reminders.map(r => r.lead_id)));
-    setLoading(false);
+    try {
+      const [data, scores, reminders] = await Promise.all([
+        base44.entities.Lead.filter(wf, "-created_date", 200),
+        base44.entities.IntentScore.filter(wf, "-scored_at", 500),
+        base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-created_date", 500).catch(() => []),
+      ]);
+      setLeads(data);
+      const scoreMap = {};
+      for (const s of scores) { scoreMap[s.lead_id] = s.intent_score; }
+      setIntentScores(scoreMap);
+      setReminderLeadIds(new Set(reminders.map(r => r.lead_id)));
+    } catch (err) {
+      toast({ title: "Failed to load leads", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLeadStatusUpdate = (leadId, newStatus) => {
@@ -82,8 +90,8 @@ export default function Leads() {
 
   if (workspaceLoading || loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <SkeletonTable rows={8} cols={7} />
       </div>
     );
   }

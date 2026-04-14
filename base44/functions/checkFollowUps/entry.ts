@@ -181,6 +181,19 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, reminders_created: created, errors: errors.length });
   } catch (error) {
     const status = error.status === 403 ? 403 : 500;
+    // Log error to ErrorLog entity (best-effort)
+    try {
+      const base44Err = createClientFromRequest(req);
+      if (status !== 401) {
+        await base44Err.asServiceRole.entities.ErrorLog.create({
+          workspace_id: 'unknown',
+          function_name: 'checkFollowUps',
+          error_message: error.message || String(error),
+          error_stack: error.stack?.slice(0, 1000) || '',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (_) {}
     return Response.json({ error: error.message }, { status });
   }
 });

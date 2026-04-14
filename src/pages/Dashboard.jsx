@@ -7,7 +7,9 @@ import { Link } from "react-router-dom";
 import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
+import { SkeletonDashboard } from "../components/SkeletonTable";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
 const PIPELINE_STAGES = ["New", "Contacted", "Replied", "Interested", "Meeting Booked", "Closed"];
@@ -26,6 +28,7 @@ function initials(name) {
 
 export default function Dashboard() {
   const { workspace, isLoading: workspaceLoading } = useWorkspace();
+  const { toast } = useToast();
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [emails, setEmails] = useState([]);
@@ -63,11 +66,7 @@ export default function Dashboard() {
   }, [workspace, workspaceLoading]);
 
   if (workspaceLoading || loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1E293B", borderTopColor: "#3B82F6" }} />
-      </div>
-    );
+    return <SkeletonDashboard />;
   }
 
   const totalLeads = leads.length;
@@ -229,16 +228,27 @@ export default function Dashboard() {
                 onClick={async () => {
                   if (!ingestionSettings?.leads_inbox) return;
                   setSyncing(true);
-                  const user = await base44.auth.me();
-                  const uf = { created_by: user.email };
-                  await base44.functions.invoke('gmailSync', {}).catch(() => {});
-                  const [isl, ill] = await Promise.all([
-                    base44.entities.EmailIngestionSettings.filter(uf, '-created_date', 1).catch(() => []),
-                    base44.entities.EmailIngestionLog.filter(uf, '-created_date', 5).catch(() => []),
-                  ]);
-                  setIngestionSettings(isl[0] || null);
-                  setIngestionLogs(ill);
-                  setSyncing(false);
+                  toast({ title: "Sync started", description: "Checking Gmail for new leads…" });
+                  try {
+                    const user = await base44.auth.me();
+                    const uf = { created_by: user.email };
+                    const res = await base44.functions.invoke('gmailSync', {});
+                    const stats = res?.data?.stats;
+                    const [isl, ill] = await Promise.all([
+                      base44.entities.EmailIngestionSettings.filter(uf, '-created_date', 1).catch(() => []),
+                      base44.entities.EmailIngestionLog.filter(uf, '-created_date', 5).catch(() => []),
+                    ]);
+                    setIngestionSettings(isl[0] || null);
+                    setIngestionLogs(ill);
+                    toast({
+                      title: "Sync complete",
+                      description: stats ? `${stats.created} new lead${stats.created !== 1 ? 's' : ''} found, ${stats.skipped} skipped` : "Sync finished",
+                    });
+                  } catch (err) {
+                    toast({ title: "Sync failed", description: err.message || "Unknown error", variant: "destructive" });
+                  } finally {
+                    setSyncing(false);
+                  }
                 }}
                 disabled={syncing || !ingestionSettings?.leads_inbox}
                 className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"

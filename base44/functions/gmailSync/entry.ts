@@ -585,6 +585,18 @@ Return ONLY valid JSON with keys: subject (string), body (string).`,
     return Response.json({ success: true, stats });
   } catch (error) {
     const status = error.status === 403 ? 403 : 500;
+    // Log error to ErrorLog entity (best-effort)
+    try {
+      if (base44 && status !== 401) {
+        await base44.asServiceRole.entities.ErrorLog.create({
+          workspace_id: workspaceId || 'unknown',
+          function_name: 'gmailSync',
+          error_message: error.message || String(error),
+          error_stack: error.stack?.slice(0, 1000) || '',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (_) {}
     return Response.json({ error: error.message }, { status });
   } finally {
     // Cleanup: abort any lingering fetch controllers

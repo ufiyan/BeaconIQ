@@ -41,6 +41,16 @@ Deno.serve(async (req) => {
 
     return Response.json(records[0]);
   } catch (error) {
+    try {
+      const base44Err = createClientFromRequest(req);
+      await base44Err.asServiceRole.entities.ErrorLog.create({
+        workspace_id: 'unknown',
+        function_name: 'getUsage',
+        error_message: error.message || String(error),
+        error_stack: error.stack?.slice(0, 1000) || '',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (_) {}
     return Response.json({ error: error.message }, { status: 500 });
   }
 });

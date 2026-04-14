@@ -1,0 +1,48 @@
+{
+  "name": "ErrorLog",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "function_name": {
+      "type": "string",
+      "title": "Function Name"
+    },
+    "error_message": {
+      "type": "string",
+      "title": "Error Message"
+    },
+    "error_stack": {
+      "type": "string",
+      "title": "Error Stack"
+    },
+    "timestamp": {
+      "type": "string",
+      "title": "Timestamp",
+      "format": "date-time"
+    },
+    "context": {
+      "type": "string",
+      "title": "Additional Context (JSON)"
+    }
+  },
+  "required": [
+    "function_name",
+    "error_message",
+    "timestamp"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "role": "admin"
+    },
+    "update": {
+      "role": "admin"
+    },
+    "delete": {
+      "role": "admin"
+    }
+  }
+}

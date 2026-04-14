@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { WorkspaceProvider } from '@/lib/WorkspaceContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -48,15 +49,15 @@ const AuthenticatedApp = () => {
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/leads" element={<Leads />} />
-        <Route path="/leads/:id" element={<LeadDetail />} />
-        <Route path="/campaigns" element={<Campaigns />} />
-        <Route path="/emails" element={<EmailLog />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/email-ingestion" element={<EmailIngestion />} />
-        <Route path="/review-queue" element={<ReviewQueue />} />
-        <Route path="/templates" element={<Templates />} />
+        <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="/leads" element={<ErrorBoundary><Leads /></ErrorBoundary>} />
+        <Route path="/leads/:id" element={<ErrorBoundary><LeadDetail /></ErrorBoundary>} />
+        <Route path="/campaigns" element={<ErrorBoundary><Campaigns /></ErrorBoundary>} />
+        <Route path="/emails" element={<ErrorBoundary><EmailLog /></ErrorBoundary>} />
+        <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+        <Route path="/email-ingestion" element={<ErrorBoundary><EmailIngestion /></ErrorBoundary>} />
+        <Route path="/review-queue" element={<ErrorBoundary><ReviewQueue /></ErrorBoundary>} />
+        <Route path="/templates" element={<ErrorBoundary><Templates /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
