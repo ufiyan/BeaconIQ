@@ -28,18 +28,59 @@ async function fetchWithRetry(url, options, retries = 3) {
   return null;
 }
 
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
+
 // Guard: throws if workspace_id is missing
 function assertWorkspaceId(workspace_id) {
   if (!workspace_id) throw new Error('[gmailSync] workspace_id is required — cross-tenant leak prevented');
 }
 
 // Middleware guard: verifies the authenticated user owns the workspace (403 on mismatch)
+// Returns the full workspace record so callers can access token fields
 async function validateTenant(base44, workspaceId, userId) {
   const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: workspaceId }, '-created_date', 1);
   if (!workspaces.length) throw Object.assign(new Error('Workspace not found'), { status: 403 });
   if (workspaces[0].owner_user_id !== userId) {
     throw Object.assign(new Error('[gmailSync] Tenant mismatch — access denied'), { status: 403 });
   }
+  return workspaces[0];
+}
+
+// Refresh the workspace's access token using its refresh token; updates the DB record
+async function refreshAccessToken(base44, workspace) {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      refresh_token: workspace.gmail_refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.access_token) {
+    throw new Error(`[gmailSync] Token refresh failed: ${data.error_description || data.error || 'unknown'}`);
+  }
+  const newExpiry = Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600);
+  await base44.entities.Workspace.update(workspace.id, {
+    gmail_access_token: data.access_token,
+    gmail_token_expiry: newExpiry,
+  });
+  return data.access_token;
+}
+
+// Returns a valid access token for the workspace, refreshing if needed
+async function getWorkspaceAccessToken(base44, workspace) {
+  const FIVE_MINUTES = 5 * 60;
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const expiresIn = (workspace.gmail_token_expiry ?? 0) - nowSecs;
+  if (expiresIn <= FIVE_MINUTES) {
+    console.log('[gmailSync] Token expiring soon — refreshing...');
+    return await refreshAccessToken(base44, workspace);
+  }
+  return workspace.gmail_access_token;
 }
 
 Deno.serve(async (req) => {
@@ -57,9 +98,16 @@ Deno.serve(async (req) => {
     // Resolve workspace and validate tenant ownership
     const workspaces = await base44.asServiceRole.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1);
     if (!workspaces.length) return Response.json({ error: 'No workspace found for user' }, { status: 400 });
-    workspaceId = workspaces[0].id;
+    const workspace = workspaces[0];
+    workspaceId = workspace.id;
     assertWorkspaceId(workspaceId);
     await validateTenant(base44, workspaceId, user.id);
+
+    // Skip sync if Gmail not connected for this workspace
+    if (!workspace.gmail_connected) {
+      console.warn(`[gmailSync] workspace ${workspaceId} has gmail_connected=false — skipping sync`);
+      return Response.json({ skipped: true, reason: 'Gmail not connected for this workspace' });
+    }
 
     // Load ingestion settings scoped to workspace
     const settingsList = await base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, '-created_date', 1);
@@ -68,8 +116,8 @@ Deno.serve(async (req) => {
     configId = config.id;
     if (!config.leads_inbox) return Response.json({ error: 'No leads inbox configured' }, { status: 400 });
 
-    // Get Gmail access token
-    const { accessToken } = await base44.asServiceRole.connectors.getConnection('gmail');
+    // Get per-tenant Gmail access token (refresh if expiring within 5 minutes)
+    const accessToken = await getWorkspaceAccessToken(base44, workspace);
     const authHeader = { Authorization: `Bearer ${accessToken}` };
 
     // Cursor-based sync window — user-scoped client enforces RLS

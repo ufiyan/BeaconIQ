@@ -14,6 +14,22 @@
       "type": "boolean",
       "title": "Gmail Connected",
       "default": false
+    },
+    "gmail_access_token": {
+      "type": "string",
+      "title": "Gmail Access Token"
+    },
+    "gmail_refresh_token": {
+      "type": "string",
+      "title": "Gmail Refresh Token"
+    },
+    "gmail_token_expiry": {
+      "type": "number",
+      "title": "Gmail Token Expiry (Unix timestamp)"
+    },
+    "gmail_email": {
+      "type": "string",
+      "title": "Connected Gmail Address"
     }
   },
   "required": [
