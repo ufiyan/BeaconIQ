@@ -79,7 +79,6 @@ export default function Dashboard() {
   const stageCounts = {};
   PIPELINE_STAGES.forEach(s => { stageCounts[s] = leads.filter(l => l.status === s).length; });
 
-  // Top high-intent leads
   const scoreMap = {};
   intentScores.forEach(s => { scoreMap[s.lead_id] = s.intent_score; });
   const highIntentLeads = [...leads]
@@ -97,12 +96,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Getting Started Banner — hide once fully configured AND has leads */}
       {!(workspace?.gmail_connected && ingestionSettings?.leads_inbox && leads.length > 0) && (
         <GettingStartedBanner workspace={workspace} ingestionSettings={ingestionSettings} />
       )}
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard icon={Users} label="Total Leads" value={totalLeads} accentColor="#3B82F6" />
         <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accentColor="#2DD4BF" />
@@ -110,7 +107,6 @@ export default function Dashboard() {
         <StatsCard icon={Calendar} label="Meetings Booked" value={meetings} accentColor="#10B981" />
       </div>
 
-      {/* Pipeline */}
       <div className="rounded-xl p-5 mb-6" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
         <p className="text-xs font-medium text-white mb-4">Lead Pipeline</p>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -124,7 +120,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* High Intent Leads */}
       {highIntentLeads.length > 0 && (
         <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
@@ -141,15 +136,14 @@ export default function Dashboard() {
                   <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
                 </div>
               </div>
-              <Link to={`/leads/${lead.id}`}>
-                <button className="text-xs px-3 py-1 rounded-lg transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}>Generate Email →</button>
+              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
+                Generate Email →
               </Link>
             </div>
           ))}
         </div>
       )}
 
-      {/* Follow-up Due */}
       {reminders.length > 0 && (
         <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid rgba(245,158,11,0.4)" }}>
           <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
@@ -174,19 +168,15 @@ export default function Dashboard() {
                   <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{r.lead_company || ''} · {r.days_since_contact}d ago</p>
                 </div>
               </div>
-              <Link to={`/leads/${r.lead_id}`}>
-                <button className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}>
-                  <Sparkles className="h-3 w-3" /> Follow-up
-                </button>
+              <Link to={`/leads/${r.lead_id}`} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
+                <Sparkles className="h-3 w-3" /> Follow-up
               </Link>
             </div>
           ))}
         </div>
       )}
 
-      {/* Two column */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Recent Leads */}
         <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
             <p className="text-xs font-medium text-white">Recent Leads</p>
@@ -196,7 +186,7 @@ export default function Dashboard() {
           </div>
           {recentLeads.length === 0 ? (
             <EmptyState icon={Users} title="No leads yet" description="Import a CSV or use Email Ingestion">
-              <Link to="/leads" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>Import leads</Link>
+              <Link to="/leads" style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: "500", background: "#F59E0B", color: "#000", textDecoration: "none" }}>Import leads</Link>
             </EmptyState>
           ) : (
             <div>
@@ -223,9 +213,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Right column */}
         <div className="space-y-4">
-          {/* Ingestion card */}
           <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-white">Lead Capture — Gmail</p>
@@ -300,7 +288,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Active Campaigns */}
           <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
               <p className="text-xs font-medium text-white">Active Campaigns</p>
@@ -308,7 +295,7 @@ export default function Dashboard() {
             </div>
             {campaigns.length === 0 ? (
               <EmptyState icon={Zap} title="No campaigns" description="Create your first campaign">
-                <Link to="/campaigns" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>Create Campaign</Link>
+                <Link to="/campaigns" style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: "500", background: "#F59E0B", color: "#000", textDecoration: "none" }}>Create Campaign</Link>
               </EmptyState>
             ) : (
               <div>
