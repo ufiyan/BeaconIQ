@@ -8,6 +8,7 @@ import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { SkeletonDashboard } from "../components/SkeletonTable";
+import GettingStartedBanner from "../components/GettingStartedBanner";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
@@ -96,6 +97,11 @@ export default function Dashboard() {
           <span className="text-xs" style={{ color: "#94A3B8" }}>BeaconIQ synced · {moment().format("h:mm A")}</span>
         </div>
       </div>
+
+      {/* Getting Started Banner — hide once fully configured AND has leads */}
+      {!(workspace?.gmail_connected && ingestionSettings?.leads_inbox && leads.length > 0) && (
+        <GettingStartedBanner workspace={workspace} ingestionSettings={ingestionSettings} />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
