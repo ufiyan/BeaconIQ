@@ -1,6 +1,5 @@
 import { CheckCircle2, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 
 export default function GettingStartedBanner({ workspace, ingestionSettings }) {
   const step1Done = true; // always true after onboarding
@@ -33,10 +32,8 @@ export default function GettingStartedBanner({ workspace, ingestionSettings }) {
         </div>
         {!step3Done && (
           <div className="flex-shrink-0">
-            <Link to="/settings?tab=ingestion">
-              <Button size="sm" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
-                Complete setup →
-              </Button>
+            <Link to="/settings?tab=ingestion" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>
+              Complete setup →
             </Link>
           </div>
         )}

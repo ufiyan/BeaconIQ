@@ -63,7 +63,7 @@ export default function LeadDetail() {
     return (
       <div className="p-6 lg:p-8 max-w-4xl mx-auto text-center py-20">
         <p className="text-muted-foreground">Lead not found</p>
-        <Link to="/leads"><Button variant="outline" className="mt-4">Back to Leads</Button></Link>
+        <Link to="/leads" className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-transparent hover:bg-accent mt-4 h-9 px-4">Back to Leads</Link>
       </div>
     );
   }

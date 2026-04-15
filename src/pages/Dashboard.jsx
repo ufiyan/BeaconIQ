@@ -9,7 +9,6 @@ import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { SkeletonDashboard } from "../components/SkeletonTable";
 import GettingStartedBanner from "../components/GettingStartedBanner";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
@@ -197,7 +196,7 @@ export default function Dashboard() {
           </div>
           {recentLeads.length === 0 ? (
             <EmptyState icon={Users} title="No leads yet" description="Import a CSV or use Email Ingestion">
-              <Link to="/leads"><Button size="sm" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Import leads</Button></Link>
+              <Link to="/leads" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>Import leads</Link>
             </EmptyState>
           ) : (
             <div>
@@ -309,7 +308,7 @@ export default function Dashboard() {
             </div>
             {campaigns.length === 0 ? (
               <EmptyState icon={Zap} title="No campaigns" description="Create your first campaign">
-                <Link to="/campaigns"><Button size="sm" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Create Campaign</Button></Link>
+                <Link to="/campaigns" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>Create Campaign</Link>
               </EmptyState>
             ) : (
               <div>
