@@ -149,7 +149,7 @@ export default function Leads() {
       {/* List view */}
       {viewMode === 'list' && (
         filtered.length === 0 ? (
-          <EmptyState icon={Users} title="No leads found" description={search ? "Try a different search" : "Import a CSV or connect Gmail to get started."}>
+          <EmptyState icon={Users} title="No leads found" description={search ? "Try a different search" : "No leads yet. Connect your Gmail inbox and BeaconIQ will automatically find leads in your emails."}>
             {!search && (
               <Button onClick={() => setShowImport(true)} className="text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Import leads</Button>
             )}

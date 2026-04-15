@@ -131,7 +131,7 @@ export default function ReviewQueue() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="text-sm font-semibold text-white">{item.sender_name || item.sender_email}</p>
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: cs.bg, color: cs.color }}>
-                        {item.confidence_score ?? "—"}% confidence
+                        AI Confidence: {item.confidence_score ?? "—"}%
                       </span>
                     </div>
                     <p className="text-xs" style={{ color: "#94A3B8" }}>

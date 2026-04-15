@@ -118,12 +118,12 @@ export default function EmailIngestionTab() {
                   {lastSyncStats && ` · ${lastSyncStats.created} created · ${lastSyncStats.reviewed} reviewed · ${lastSyncStats.skipped} skipped`}
                 </p>
               ) : (
-                <p className="text-xs" style={{ color: "#94A3B8" }}>No sync run yet · click "Sync Now" to start</p>
+                <p className="text-xs" style={{ color: "#94A3B8" }}>No sync run yet · click "Check for new leads now" to start</p>
               )}
             </div>
             <Button size="sm" onClick={handleSyncNow} disabled={syncing} className="gap-2">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Sync Now
+              Check for new leads now
             </Button>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function EmailIngestionTab() {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <Label>Confidence threshold</Label>
+              <Label>AI Confidence threshold</Label>
               <span className="text-sm font-semibold text-white">{form.confidence_threshold}%</span>
             </div>
             <input

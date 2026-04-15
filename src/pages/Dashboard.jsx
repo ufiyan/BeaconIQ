@@ -229,7 +229,7 @@ export default function Dashboard() {
           {/* Ingestion card */}
           <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-white">Email Ingestion</p>
+              <p className="text-xs font-medium text-white">Lead Capture — Gmail</p>
               <button
                 onClick={async () => {
                   if (!ingestionSettings?.leads_inbox) return;
@@ -261,7 +261,7 @@ export default function Dashboard() {
                 style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}
               >
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Sync Now
+                Check for new leads now
               </button>
             </div>
 
@@ -278,7 +278,7 @@ export default function Dashboard() {
             ) : (
               <div className="mb-3">
                 <p className="text-xs" style={{ color: "#94A3B8" }}>Not configured</p>
-                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#3B82F6" }}>Set up Email Ingestion →</Link>
+                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#3B82F6" }}>Set up Inbox Monitor →</Link>
               </div>
             )}
 

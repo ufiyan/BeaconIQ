@@ -70,7 +70,7 @@ export default function EmailIngestion() {
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-      <PageHeader title="Email Sync" description="Automated Gmail ingestion history">
+      <PageHeader title="Inbox Monitor" description="Automated Gmail ingestion history">
         <div className="flex items-center gap-2">
           <Link to="/settings?tab=ingestion">
             <Button variant="outline" size="sm" className="gap-1.5">
@@ -79,17 +79,17 @@ export default function EmailIngestion() {
           </Link>
           <Button size="sm" onClick={syncNow} disabled={syncing} className="gap-2">
             {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Sync Now
+            Check for new leads now
           </Button>
         </div>
       </PageHeader>
 
       {!settings?.leads_inbox ? (
         <div className="rounded-xl p-5 mb-6 border" style={{ background: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.3)" }}>
-          <p className="text-sm font-medium" style={{ color: "#F59E0B" }}>⚠ Email ingestion not configured</p>
+          <p className="text-sm font-medium" style={{ color: "#F59E0B" }}>⚠ Inbox Monitor not configured</p>
           <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>
             Set up your Gmail connection and leads inbox address in{" "}
-            <Link to="/settings?tab=ingestion" className="underline" style={{ color: "#3B82F6" }}>Settings → Email Ingestion</Link>
+            <Link to="/settings?tab=ingestion" className="underline" style={{ color: "#3B82F6" }}>Settings → Inbox Monitor</Link>
           </p>
         </div>
       ) : (
@@ -122,7 +122,7 @@ export default function EmailIngestion() {
       {/* Log table */}
       <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-          <p className="text-xs font-medium text-white">Ingestion Log</p>
+          <p className="text-xs font-medium text-white">Activity Log</p>
           <span className="text-xs" style={{ color: "#94A3B8" }}>{logs.length} total</span>
         </div>
         {logs.length === 0 ? (
@@ -141,7 +141,7 @@ export default function EmailIngestion() {
                     <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{log.subject || log.email_body_summary || "—"}</p>
                   </div>
                   {log.confidence_score != null && (
-                    <span className="text-xs flex-shrink-0" style={{ color: "#94A3B8" }}>{log.confidence_score}%</span>
+                    <span className="text-xs flex-shrink-0" style={{ color: "#94A3B8" }}>AI Confidence: {log.confidence_score}%</span>
                   )}
                   <span className="text-xs flex-shrink-0" style={{ color: "#94A3B8" }}>
                     {moment(log.created_date).fromNow()}
