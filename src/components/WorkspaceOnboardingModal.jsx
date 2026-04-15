@@ -216,7 +216,7 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
             <>
               <div>
                 <h2 className="text-lg font-semibold text-white mb-1">Connect Gmail</h2>
-                <p className="text-sm text-muted-foreground">BeaconIQ will read your inbox to automatically capture leads from inbound emails.</p>
+                <p className="text-sm text-muted-foreground">Connect the Gmail account where your customers and leads send enquiries. This is usually your business email like leads@yourcompany.com or info@youragency.com — it may be different from the Google account you used to sign up for BeaconIQ.</p>
               </div>
               {gmailConnected ? (
                 <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
@@ -243,6 +243,12 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
                     )}
                     {polling ? "Waiting for authorization..." : "Sign in with Google"}
                   </button>
+                  <div className="flex items-start gap-2 p-3 rounded-lg" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                    <span className="text-blue-400 text-sm mt-0.5">ℹ</span>
+                    <p className="text-xs text-muted-foreground">
+                      You are currently logged into BeaconIQ as <strong className="text-white">{user?.email}</strong>. The Gmail you connect here is the inbox where your leads write to you — it can be the same account or a different one.
+                    </p>
+                  </div>
                   {polling && (
                     <p className="text-xs text-center text-muted-foreground">
                       Complete sign-in in the popup window — this page will update automatically.

@@ -162,6 +162,12 @@ export default function EmailIngestionTab() {
           <span className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: "rgba(59,130,246,0.2)", color: "#3B82F6" }}>2</span>
           <h3 className="text-sm font-semibold text-white">Enter your leads inbox address</h3>
         </div>
+        <div className="mb-3 flex items-start gap-2 p-3 rounded-lg" style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)" }}>
+          <span className="text-blue-400 text-sm mt-0.5">ℹ</span>
+          <p className="text-xs text-muted-foreground">
+            Step 1 above connects BeaconIQ to read a Gmail account. Step 2 tells BeaconIQ which specific email address within that account your customers write to. These can be different — for example you might connect your Google Workspace account but your leads write to info@yourcompany.com.
+          </p>
+        </div>
         <Label>Your leads inbox address</Label>
         <Input
           className="mt-1"
