@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, Mail, Sparkles, Building2, ArrowRight } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, Sparkles, Building2, ArrowRight, Inbox } from "lucide-react";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -33,8 +33,9 @@ function getGmailOAuthUrl(workspaceId) {
 const STEPS = [
   { id: 1, label: "Workspace", icon: Building2 },
   { id: 2, label: "Gmail", icon: Mail },
-  { id: 3, label: "AI Setup", icon: Sparkles },
-  { id: 4, label: "Done", icon: CheckCircle2 },
+  { id: 3, label: "Leads Inbox", icon: Inbox },
+  { id: 4, label: "AI Setup", icon: Sparkles },
+  { id: 5, label: "Done", icon: CheckCircle2 },
 ];
 
 export default function WorkspaceOnboardingModal({ user, onComplete }) {
@@ -43,6 +44,8 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState(null);
   const [polling, setPolling] = useState(false);
+  const [leadsInbox, setLeadsInbox] = useState("");
+  const [savingInbox, setSavingInbox] = useState(false);
   const [aiProvider, setAiProvider] = useState("base44");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
@@ -129,7 +132,22 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     startPollingForGmail(workspace.id);
   };
 
-  // Step 3: Save AI config
+  // Step 3: Save leads inbox
+  const handleSaveLeadsInbox = async (skip = false) => {
+    if (!skip && leadsInbox.trim()) {
+      setSavingInbox(true);
+      const existing = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspace.id }, '-created_date', 1).catch(() => []);
+      if (existing.length > 0) {
+        await base44.entities.EmailIngestionSettings.update(existing[0].id, { leads_inbox: leadsInbox.trim() });
+      } else {
+        await base44.entities.EmailIngestionSettings.create({ workspace_id: workspace.id, leads_inbox: leadsInbox.trim() });
+      }
+      setSavingInbox(false);
+    }
+    setStep(4);
+  };
+
+  // Step 4: Save AI config
   const handleSaveAI = async () => {
     setLoading(true);
     const update = { ai_provider: aiProvider };
@@ -137,10 +155,10 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     if (aiModel.trim()) update.ai_model = aiModel.trim();
     await base44.entities.Workspace.update(workspace.id, update);
     setLoading(false);
-    setStep(4);
+    setStep(5);
   };
 
-  // Step 4: Mark onboarding complete
+  // Step 5: Mark onboarding complete
   const handleFinish = async () => {
     setLoading(true);
     await base44.entities.Workspace.update(workspace.id, { onboarding_complete: true });
@@ -276,8 +294,35 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
             </>
           )}
 
-          {/* STEP 3 */}
+          {/* STEP 3 — Leads Inbox */}
           {step === 3 && (
+            <>
+              <div>
+                <h2 className="text-lg font-semibold text-white mb-1">Which email do your leads write to?</h2>
+                <p className="text-sm text-muted-foreground">This is the email address on your website contact form, ads, or business cards. BeaconIQ will watch this address for new enquiries.</p>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Leads inbox address</Label>
+                <Input
+                  value={leadsInbox}
+                  onChange={e => setLeadsInbox(e.target.value)}
+                  placeholder="e.g. leads@yourcompany.com or info@youragency.com"
+                  onKeyDown={e => e.key === "Enter" && leadsInbox.trim() && handleSaveLeadsInbox(false)}
+                  autoFocus
+                />
+              </div>
+              <Button onClick={() => handleSaveLeadsInbox(false)} disabled={!leadsInbox.trim() || savingInbox} className="w-full gap-2">
+                {savingInbox ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {savingInbox ? "Saving..." : "Continue"}
+              </Button>
+              <button onClick={() => handleSaveLeadsInbox(true)} className="w-full text-xs text-center" style={{ color: "#64748B" }}>
+                Set this up later in Settings
+              </button>
+            </>
+          )}
+
+          {/* STEP 4 — AI Config */}
+          {step === 4 && (
             <>
               <div>
                 <h2 className="text-lg font-semibold text-white mb-1">AI Configuration</h2>
@@ -329,8 +374,8 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
             </>
           )}
 
-          {/* STEP 4 */}
-          {step === 4 && (
+          {/* STEP 5 — Done */}
+          {step === 5 && (
             <>
               <div className="text-center pt-2">
                 <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
