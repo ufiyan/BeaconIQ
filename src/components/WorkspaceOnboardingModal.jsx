@@ -16,7 +16,8 @@ const GMAIL_SCOPES = [
 const GMAIL_REDIRECT_URI = "https://app.base44.com/oauth/callback";
 
 function getGmailOAuthUrl(workspaceId) {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
+  if (!clientId) return null;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: GMAIL_REDIRECT_URI,
@@ -106,6 +107,10 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   const handleConnectGmail = () => {
     if (!workspace) return;
     const url = getGmailOAuthUrl(workspace.id);
+    if (!url) {
+      alert("Gmail connection is not configured.");
+      return;
+    }
     window.open(url, "_blank", "width=500,height=650");
 
     // Listen for postMessage (fast path)

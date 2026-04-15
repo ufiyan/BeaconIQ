@@ -10,7 +10,7 @@ import {
   AlertTriangle, BrainCircuit, RefreshCw, WifiOff
 } from "lucide-react";
 
-const GOOGLE_CLIENT_ID = "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
 
 function getOAuthUrl(workspaceId) {
   return `https://accounts.google.com/o/oauth2/auth?` + new URLSearchParams({
@@ -106,12 +106,19 @@ export default function WorkspaceSettingsTab() {
     if (!workspace) return;
     setConnectingGmail(true);
     window.open(getOAuthUrl(workspace.id), "_blank", "width=500,height=650");
-    const onMessage = (event) => {
+    const onMessage = async (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === "GMAIL_CONNECTED") {
         window.removeEventListener("message", onMessage);
         setConnectingGmail(false);
-        toast({ title: "Gmail connected!", description: event.data.gmail_email });
+        // Use EmailIngestionSettings as source of truth for connection status
+        const settingsList = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspace.id });
+        const connected = settingsList.length > 0 && settingsList[0].gmail_connected;
+        const email = settingsList[0]?.gmail_email || event.data.gmail_email;
+        if (connected) {
+          setWorkspace(prev => ({ ...prev, gmail_connected: true, gmail_email: email }));
+        }
+        toast({ title: "Gmail connected!", description: email });
         loadAll();
       }
     };
@@ -121,12 +128,20 @@ export default function WorkspaceSettingsTab() {
   const handleDisconnectGmail = async () => {
     if (!workspace) return;
     setDisconnectingGmail(true);
+    const settings = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspace.id });
+    if (settings.length > 0) {
+      await base44.entities.EmailIngestionSettings.update(settings[0].id, {
+        gmail_connected: false,
+        gmail_access_token: "",
+        gmail_refresh_token: "",
+        gmail_token_expiry: null,
+        gmail_email: "",
+        is_active: false,
+      });
+    }
     await base44.entities.Workspace.update(workspace.id, {
       gmail_connected: false,
-      gmail_access_token: "",
-      gmail_refresh_token: "",
       gmail_email: "",
-      gmail_token_expiry: null,
     });
     setWorkspace(prev => ({ ...prev, gmail_connected: false, gmail_email: "" }));
     toast({ title: "Gmail disconnected" });
