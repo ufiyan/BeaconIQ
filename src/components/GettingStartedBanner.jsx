@@ -2,7 +2,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function GettingStartedBanner({ workspace, ingestionSettings }) {
-  const step1Done = true; // always true after onboarding
+  const step1Done = true;
   const step2Done = !!workspace?.gmail_connected;
   const step3Done = !!ingestionSettings?.leads_inbox;
 
@@ -23,7 +23,7 @@ export default function GettingStartedBanner({ workspace, ingestionSettings }) {
                 {step.done
                   ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: "#10B981" }} />
                   : <Circle className="h-4 w-4 flex-shrink-0" style={{ color: "#475569" }} />}
-                <span className="text-sm" style={{ color: step.done ? "#E2E8F0" : "#94A3B8", textDecoration: step.done ? "none" : "none" }}>
+                <span className="text-sm" style={{ color: step.done ? "#E2E8F0" : "#94A3B8" }}>
                   {step.label}
                 </span>
               </div>
@@ -32,7 +32,10 @@ export default function GettingStartedBanner({ workspace, ingestionSettings }) {
         </div>
         {!step3Done && (
           <div className="flex-shrink-0">
-            <Link to="/settings?tab=ingestion" className="inline-flex items-center justify-center rounded-md text-sm font-medium h-8 px-3" style={{ background: "#F59E0B", color: "#000" }}>
+            <Link
+              to="/settings?tab=ingestion"
+              style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: "500", background: "#F59E0B", color: "#000", textDecoration: "none" }}
+            >
               Complete setup →
             </Link>
           </div>
