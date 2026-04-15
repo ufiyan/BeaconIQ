@@ -4,15 +4,27 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useState, useEffect } from "react";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { label: "Leads", icon: Users, path: "/leads" },
-  { label: "Campaigns", icon: Zap, path: "/campaigns" },
-  { label: "Email Log", icon: Mail, path: "/emails" },
-  { label: "Templates", icon: FileText, path: "/templates" },
-  { label: "Sync Log", icon: Inbox, path: "/email-ingestion" },
-  { label: "Review Queue", icon: GitPullRequest, path: "/review-queue" },
-  { label: "Settings", icon: Settings, path: "/settings" },
+const navGroups = [
+  {
+    items: [
+      { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+      { label: "Leads", icon: Users, path: "/leads" },
+      { label: "Campaigns", icon: Zap, path: "/campaigns" },
+    ]
+  },
+  {
+    items: [
+      { label: "Sent Emails", icon: Mail, path: "/emails" },
+      { label: "Inbox Activity", subtitle: "Emails scanned by AI", icon: Inbox, path: "/email-ingestion" },
+      { label: "Needs Review", icon: GitPullRequest, path: "/review-queue", badge: true },
+    ]
+  },
+  {
+    items: [
+      { label: "Email Templates", icon: FileText, path: "/templates" },
+      { label: "Settings", icon: Settings, path: "/settings" },
+    ]
+  },
 ];
 
 export default function Sidebar({ onClose }) {
@@ -45,30 +57,40 @@ export default function Sidebar({ onClose }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path ||
-            (item.path !== "/" && location.pathname.startsWith(item.path));
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              onClick={onClose}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 relative"
-              style={{
-                background: isActive ? "#1E3A5F" : "transparent",
-                color: isActive ? "#3B82F6" : "#94A3B8",
-                borderLeft: isActive ? "4px solid #F59E0B" : "4px solid transparent",
-              }}
-            >
-              <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {item.label === "Review Queue" && pendingCount > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full font-bold leading-none" style={{ background: "#F59E0B", color: "#000" }}>{pendingCount}</span>
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        {navGroups.map((group, gi) => (
+          <div key={gi}>
+            {gi > 0 && <div className="my-2 mx-2" style={{ borderTop: "1px solid hsl(var(--sidebar-border))" }} />}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path ||
+                  (item.path !== "/" && location.pathname.startsWith(item.path));
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onClose}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 relative"
+                    style={{
+                      background: isActive ? "#1E3A5F" : "transparent",
+                      color: isActive ? "#3B82F6" : "#94A3B8",
+                      borderLeft: isActive ? "4px solid #F59E0B" : "4px solid transparent",
+                    }}
+                  >
+                    <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
+                    <span className="flex-1 leading-tight">
+                      {item.label}
+                      {item.subtitle && <span className="block text-xs font-normal" style={{ color: "#64748B" }}>{item.subtitle}</span>}
+                    </span>
+                    {item.badge && pendingCount > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-bold leading-none" style={{ background: "#F59E0B", color: "#000" }}>{pendingCount}</span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* User section */}
