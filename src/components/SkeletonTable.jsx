@@ -1,13 +1,17 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function SkeletonTable({ rows = 6, cols = 5 }) {
+  const colCount = Number(cols) || 5;
+  const rowCount = Number(rows) || 6;
+  const colIndices = Array.from({ length: colCount }, (_, i) => i);
+  const rowIndices = Array.from({ length: rowCount }, (_, i) => i);
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-              {Array.from({ length: cols }).map((_, i) => (
+              {colIndices.map((i) => (
                 <th key={i} className="px-4 py-3">
                   <Skeleton className="h-3 w-20" />
                 </th>
@@ -15,11 +19,11 @@ export function SkeletonTable({ rows = 6, cols = 5 }) {
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: rows }).map((_, r) => (
+            {rowIndices.map((r) => (
               <tr key={r} style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-                {Array.from({ length: cols }).map((_, c) => (
+                {colIndices.map((c) => (
                   <td key={c} className="px-4 py-3">
-                    <Skeleton className={c === 0 ? "h-3 w-32" : c === cols - 1 ? "h-3 w-16" : "h-3 w-24"} />
+                    <Skeleton className={c === 0 ? "h-3 w-32" : c === colCount - 1 ? "h-3 w-16" : "h-3 w-24"} />
                   </td>
                 ))}
               </tr>
