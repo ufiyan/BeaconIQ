@@ -47,7 +47,6 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
-      <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route element={<Layout />}>
         <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
         <Route path="/leads" element={<ErrorBoundary><Leads /></ErrorBoundary>} />
@@ -71,9 +70,14 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <WorkspaceProvider>
-            <AuthenticatedApp />
-          </WorkspaceProvider>
+          <Routes>
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
+            <Route path="*" element={
+              <WorkspaceProvider>
+                <AuthenticatedApp />
+              </WorkspaceProvider>
+            } />
+          </Routes>
         </Router>
         <Toaster />
       </QueryClientProvider>
