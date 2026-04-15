@@ -19,7 +19,7 @@ export function SkeletonTable({ rows = 6, cols = 5 }) {
               <tr key={r} style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
                 {Array.from({ length: cols }).map((_, c) => (
                   <td key={c} className="px-4 py-3">
-                    <Skeleton className={`h-3 ${c === 0 ? "w-32" : c === cols - 1 ? "w-16" : "w-24"}`} />
+                    <Skeleton className={c === 0 ? "h-3 w-32" : c === cols - 1 ? "h-3 w-16" : "h-3 w-24"} />
                   </td>
                 ))}
               </tr>
