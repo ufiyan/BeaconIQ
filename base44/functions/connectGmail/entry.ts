@@ -87,6 +87,14 @@ Deno.serve(async (req) => {
     console.log('[connectGmail] Gmail email:', userData.email);
 
     const base44 = createClientFromRequest(req);
+
+    // Authenticate the calling user
+    const authUser = await base44.auth.me();
+    if (!authUser) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const authenticatedEmail = authUser.email;
+
     const tokenExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
 
     // Store tokens on EmailIngestionSettings (scoped to workspace)
@@ -96,13 +104,20 @@ Deno.serve(async (req) => {
     );
 
     if (settingsList.length) {
-      console.log('[connectGmail] Updating existing EmailIngestionSettings:', settingsList[0].id);
-      await base44.asServiceRole.entities.EmailIngestionSettings.update(settingsList[0].id, {
+      const existing = settingsList[0];
+      // Security check: ensure the record belongs to the authenticated user
+      if (existing.created_by && existing.created_by !== authenticatedEmail) {
+        console.error('[connectGmail] Ownership mismatch — refusing to update');
+        return Response.json({ success: false, error: 'Forbidden: record does not belong to you' }, { status: 403 });
+      }
+      console.log('[connectGmail] Updating existing EmailIngestionSettings:', existing.id);
+      await base44.asServiceRole.entities.EmailIngestionSettings.update(existing.id, {
         gmail_access_token: tokenData.access_token,
-        gmail_refresh_token: tokenData.refresh_token ?? settingsList[0].gmail_refresh_token ?? null,
+        gmail_refresh_token: tokenData.refresh_token ?? existing.gmail_refresh_token ?? null,
         gmail_token_expiry: tokenExpiry,
         gmail_email: userData.email,
         gmail_connected: true,
+        created_by: authenticatedEmail,
       });
     } else {
       console.log('[connectGmail] No settings found — creating new EmailIngestionSettings record');
@@ -113,6 +128,7 @@ Deno.serve(async (req) => {
         gmail_token_expiry: tokenExpiry,
         gmail_email: userData.email,
         gmail_connected: true,
+        created_by: authenticatedEmail,
       });
     }
 
