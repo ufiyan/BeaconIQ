@@ -25,11 +25,11 @@ Deno.serve(async (req) => {
 
     if (action === 'clear') {
       await clearDemoData(base44, workspace_id);
-      return Response.json({ success: true, message: 'Demo data cleared.' });
+      return Response.json({ success: true, message: 'Demo workspace cleared.' });
     }
 
     if (action === 'seed') {
-      // Idempotency: check if already seeded by looking for demo leads
+      // Idempotency: check if already seeded
       const allLeads = await base44.asServiceRole.entities.Lead.filter({ workspace_id }, '-created_date', 50);
       const existing = allLeads.filter(l => l.notes?.includes(DEMO_MARKER));
       if (existing.length > 0) {
@@ -37,10 +37,22 @@ Deno.serve(async (req) => {
       }
 
       const result = await seedDemoData(base44, workspace_id, user);
-      return Response.json({ success: true, ...result });
+      return Response.json({
+        success: true,
+        message: 'Demo workspace ready',
+        counts: {
+          leads: result.leads_created,
+          campaigns: result.campaigns_created,
+          prospects: result.prospects_created,
+          intent_scores: result.intent_scores_created,
+          ingestion_logs: result.ingestion_logs_created,
+          reminders: result.reminders_created,
+        },
+        ...result,
+      });
     }
 
-    return Response.json({ error: 'Invalid action. Use seed or clear.' }, { status: 400 });
+    return Response.json({ error: 'Unsupported action. Use seed or clear.' }, { status: 400 });
 
   } catch (error) {
     console.error('[loadDemoData]', error.message);
