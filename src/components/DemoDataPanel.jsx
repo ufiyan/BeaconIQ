@@ -29,12 +29,16 @@ export default function DemoDataPanel() {
     setSeeding(true);
     try {
       const res = await base44.functions.invoke("loadDemoData", { action: "seed", workspace_id: workspace.id });
-      if (res.data.already_seeded) {
-        toast({ title: "Demo data already loaded", description: "Clear first to re-seed." });
+      const d = res.data;
+      if (d.already_seeded) {
+        toast({ title: "Demo data already loaded", description: "Click 'Clear Demo Data' first, then re-seed." });
       } else {
         setDone("seeded");
-        toast({ title: "Demo workspace loaded!", description: `${res.data.leads_created} leads, ${res.data.prospects_created} prospects, and more.` });
-        setTimeout(() => window.location.reload(), 1200);
+        toast({
+          title: "Demo workspace ready!",
+          description: `${d.leads_created} leads · ${d.prospects_created} prospects · ${d.campaigns_created} campaigns · ${d.ingestion_logs_created} inbox logs seeded.`,
+        });
+        setTimeout(() => window.location.reload(), 1500);
       }
     } catch (e) {
       toast({ title: "Error loading demo data", description: e.message, variant: "destructive" });

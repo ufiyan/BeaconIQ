@@ -3,7 +3,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 /**
  * loadDemoData — BeaconIQ Demo / Sandbox Seeder
  * Seeds a full, realistic workspace across all entities.
- * Idempotent: keyed by workspace_id + demo_seed marker, never duplicates.
+ * Idempotent: keyed by notes/description containing DEMO_MARKER, never duplicates.
  * Action: "seed" | "clear"
  */
 
@@ -18,9 +18,10 @@ Deno.serve(async (req) => {
     const { action, workspace_id } = await req.json();
     if (!workspace_id) return Response.json({ error: 'workspace_id required' }, { status: 400 });
 
-    // Validate workspace ownership
-    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: workspace_id }, '-created_date', 1);
-    if (!workspaces.length) return Response.json({ error: 'Workspace not found' }, { status: 404 });
+    // Validate workspace ownership — list all and find by id
+    const allWorkspaces = await base44.asServiceRole.entities.Workspace.list('-created_date', 200);
+    const workspace = allWorkspaces.find(w => w.id === workspace_id);
+    if (!workspace) return Response.json({ error: 'Workspace not found' }, { status: 404 });
 
     if (action === 'clear') {
       await clearDemoData(base44, workspace_id);
@@ -28,8 +29,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'seed') {
-      // Idempotency: check if already seeded
-      const existing = await base44.asServiceRole.entities.Lead.filter({ workspace_id, notes: DEMO_MARKER }, '-created_date', 1);
+      // Idempotency: check if already seeded by looking for demo leads
+      const allLeads = await base44.asServiceRole.entities.Lead.filter({ workspace_id }, '-created_date', 50);
+      const existing = allLeads.filter(l => l.notes?.includes(DEMO_MARKER));
       if (existing.length > 0) {
         return Response.json({ success: true, already_seeded: true, message: 'Demo data already loaded. Clear first to re-seed.' });
       }
@@ -47,35 +49,35 @@ Deno.serve(async (req) => {
 });
 
 async function clearDemoData(base44, workspace_id) {
-  const [leads, campaigns, emails, logs, reminders, ingestion, intentScores, icps, prospects, signals, contacts, runs] = await Promise.all([
-    base44.asServiceRole.entities.Lead.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.Campaign.filter({ workspace_id }, '-created_date', 50),
-    base44.asServiceRole.entities.EmailLog.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.EmailIngestionLog.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.FollowUpReminder.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.EmailIngestionSettings.filter({ workspace_id }, '-created_date', 10),
-    base44.asServiceRole.entities.IntentScore.filter({ workspace_id }, '-created_date', 200),
-    base44.asServiceRole.entities.IdealCustomerProfile.filter({ workspace_id }, '-created_date', 20),
-    base44.asServiceRole.entities.Prospect.filter({ workspace_id }, '-created_date', 200),
-    base44.asServiceRole.entities.ProspectSignal.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.ProspectContact.filter({ workspace_id }, '-created_date', 500),
-    base44.asServiceRole.entities.DiscoveryRun.filter({ workspace_id }, '-created_date', 50),
+  const sr = base44.asServiceRole;
+  const [leads, campaigns, emails, logs, reminders, ingestion, intentScores, icps, prospects, signals, contacts, runs, businessProfiles] = await Promise.all([
+    sr.entities.Lead.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.Campaign.filter({ workspace_id }, '-created_date', 50),
+    sr.entities.EmailLog.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.EmailIngestionLog.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.FollowUpReminder.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.EmailIngestionSettings.filter({ workspace_id }, '-created_date', 10),
+    sr.entities.IntentScore.filter({ workspace_id }, '-created_date', 200),
+    sr.entities.IdealCustomerProfile.filter({ workspace_id }, '-created_date', 20),
+    sr.entities.Prospect.filter({ workspace_id }, '-created_date', 200),
+    sr.entities.ProspectSignal.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.ProspectContact.filter({ workspace_id }, '-created_date', 500),
+    sr.entities.DiscoveryRun.filter({ workspace_id }, '-created_date', 50),
+    sr.entities.BusinessProfile.filter({ workspace_id }, '-created_date', 10),
   ]);
 
   const demoLeads = leads.filter(l => l.notes?.includes(DEMO_MARKER));
   const demoCampaigns = campaigns.filter(c => c.description?.includes(DEMO_MARKER));
   const demoEmails = emails.filter(e => e.body?.includes(DEMO_MARKER));
-  const demoLogs = logs.filter(l => l.body_preview?.includes(DEMO_MARKER) || l.skip_reason?.includes(DEMO_MARKER));
-  const demoReminders = reminders.filter(r => r.dismiss_reason?.includes(DEMO_MARKER) || r.workspace_id === workspace_id);
+  const demoLogs = logs.filter(l => l.body_preview?.includes(DEMO_MARKER));
+  const demoReminders = reminders.filter(r => r.dismiss_reason?.includes(DEMO_MARKER));
   const demoIngestion = ingestion.filter(i => i.keywords?.includes(DEMO_MARKER));
   const demoIntentScores = intentScores.filter(s => s.source_text?.includes(DEMO_MARKER));
   const demoICPs = icps.filter(i => i.name?.includes('[Demo]'));
   const demoProspects = prospects.filter(p => p.source === 'AI Discovery' || p.ai_summary?.includes(DEMO_MARKER));
-  const demoSignals = signals;
-  const demoContacts = contacts;
-  const demoRuns = runs;
+  const demoBusinessProfiles = businessProfiles.filter(bp => bp.website?.includes('apexgrowthpartners.com'));
 
-  const deleteAll = (entity, items) => Promise.all(items.map(i => base44.asServiceRole.entities[entity].delete(i.id).catch(() => {})));
+  const deleteAll = (entity, items) => Promise.all(items.map(i => sr.entities[entity].delete(i.id).catch(() => {})));
 
   await Promise.all([
     deleteAll('Lead', demoLeads),
@@ -87,21 +89,23 @@ async function clearDemoData(base44, workspace_id) {
     deleteAll('IntentScore', demoIntentScores),
     deleteAll('IdealCustomerProfile', demoICPs),
     deleteAll('Prospect', demoProspects),
-    deleteAll('ProspectSignal', demoSignals),
-    deleteAll('ProspectContact', demoContacts),
-    deleteAll('DiscoveryRun', demoRuns),
+    deleteAll('ProspectSignal', signals),
+    deleteAll('ProspectContact', contacts),
+    deleteAll('DiscoveryRun', runs),
+    deleteAll('BusinessProfile', demoBusinessProfiles),
   ]);
 }
 
 async function seedDemoData(base44, workspace_id, user) {
+  const sr = base44.asServiceRole;
   const now = new Date();
   const daysAgo = (d) => new Date(now.getTime() - d * 86400000).toISOString();
   const M = DEMO_MARKER;
 
   // ── Business Profile ──────────────────────────────────────────
-  const existingProfile = await base44.asServiceRole.entities.BusinessProfile.filter({ workspace_id }, '-created_date', 1);
-  if (!existingProfile.length) {
-    await base44.entities.BusinessProfile.create({
+  const existingProfiles = await sr.entities.BusinessProfile.filter({ workspace_id }, '-created_date', 1);
+  if (!existingProfiles.length) {
+    await sr.entities.BusinessProfile.create({
       workspace_id,
       business_name: "Apex Growth Partners",
       description: "We help B2B SaaS companies and marketing agencies scale their outbound pipeline using AI-driven lead intelligence and hyper-personalized email sequences.",
@@ -117,7 +121,7 @@ async function seedDemoData(base44, workspace_id, user) {
 
   // ── Campaigns ─────────────────────────────────────────────────
   const [campQ1, campOutbound, campNurture] = await Promise.all([
-    base44.entities.Campaign.create({
+    sr.entities.Campaign.create({
       workspace_id,
       name: "Q1 SaaS Outreach",
       description: `Campaign for Q1 SaaS targets ${M}`,
@@ -132,7 +136,7 @@ async function seedDemoData(base44, workspace_id, user) {
         { day: 7, subject_template: "Last check-in", message_template: "Didn't want this to slip through..." },
       ],
     }),
-    base44.entities.Campaign.create({
+    sr.entities.Campaign.create({
       workspace_id,
       name: "Fintech Series B Targets",
       description: `Outbound to post-Series B fintech ${M}`,
@@ -143,7 +147,7 @@ async function seedDemoData(base44, workspace_id, user) {
       total_opened: 13,
       steps: [],
     }),
-    base44.entities.Campaign.create({
+    sr.entities.Campaign.create({
       workspace_id,
       name: "Re-Engagement: Cold Leads",
       description: `Nurture sequence for cold leads ${M}`,
@@ -171,7 +175,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ];
 
   const createdLeads = await Promise.all(
-    leadsData.map(l => base44.entities.Lead.create({
+    leadsData.map(l => sr.entities.Lead.create({
       ...l,
       workspace_id,
       source: "Email Ingestion",
@@ -190,7 +194,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ];
 
   await Promise.all(intentData.map(({ lead, score, urgency, pain, signals }) =>
-    base44.entities.IntentScore.create({
+    sr.entities.IntentScore.create({
       workspace_id,
       lead_id: lead.id,
       intent_score: score,
@@ -215,7 +219,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ];
 
   await Promise.all(emailLogs.map(({ lead, subject, body, status, sent_at }) =>
-    base44.entities.EmailLog.create({
+    sr.entities.EmailLog.create({
       workspace_id,
       lead_id: lead.id,
       lead_name: lead.name,
@@ -230,7 +234,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ));
 
   // ── Email Ingestion Logs ──────────────────────────────────────
-  const ingestionLogs = [
+  const ingestionLogsData = [
     { name: "Sarah Chen", email: "sarah.chen@prism.io", subject: "Interested in learning more", result: "lead_created", conf: 92, company: "Prism Analytics", preview: `Hi, I found your agency through a LinkedIn post... ${M}` },
     { name: "Marcus Webb", email: "m.webb@dataloop.ai", subject: "Re: Scaling outbound at DataLoop", result: "lead_created", conf: 88, company: "DataLoop AI", preview: `We're post-Series A and need a repeatable process... ${M}` },
     { name: "Anonymous", email: "info@techblog.co", subject: "Newsletter subscription", result: "skipped", conf: 12, company: "", preview: `You're subscribed to TechPulse Weekly... ${M}` },
@@ -241,10 +245,10 @@ async function seedDemoData(base44, workspace_id, user) {
     { name: "Nina Patel", email: "nina@clearstride.com", subject: "Looking for outbound partner", result: "pending_review", conf: 63, company: "ClearStride", preview: `We're a 45-person SaaS company trying to build... ${M}` },
   ];
 
-  await Promise.all(ingestionLogs.map(({ name, email, subject, result, conf, company, preview }, i) =>
-    base44.entities.EmailIngestionLog.create({
+  await Promise.all(ingestionLogsData.map(({ name, email, subject, result, conf, company, preview }, i) =>
+    sr.entities.EmailIngestionLog.create({
       workspace_id,
-      gmail_message_id: `demo_msg_${i}_${workspace_id}`,
+      gmail_message_id: `demo_msg_${i}_${workspace_id.slice(0, 8)}`,
       sender_name: name,
       sender_email: email,
       subject,
@@ -253,16 +257,33 @@ async function seedDemoData(base44, workspace_id, user) {
       processed_at: daysAgo(i * 0.8),
       result,
       confidence_score: conf,
-      ai_summary: result !== 'skipped' ? `AI identified this as a potential ${result === 'lead_created' ? 'high-value' : 'medium-value'} B2B lead.` : 'Non-lead automated email.',
+      ai_summary: result !== 'skipped' ? `AI identified this as a ${result === 'lead_created' ? 'high-value' : 'medium-value'} B2B lead.` : 'Non-lead automated email.',
       extracted_name: name,
       extracted_email: email,
       extracted_company: company,
     })
   ));
 
+  // ── Email Ingestion Settings (so inbox monitor shows configured) ──
+  const existingIngestion = await sr.entities.EmailIngestionSettings.filter({ workspace_id }, '-created_date', 1);
+  if (!existingIngestion.length) {
+    await sr.entities.EmailIngestionSettings.create({
+      workspace_id,
+      leads_inbox: "leads@apexgrowthpartners.com",
+      sync_time: "08:00",
+      keywords: `demo,saas,pipeline,outbound ${M}`,
+      confidence_threshold: 60,
+      auto_create: true,
+      lookback_window: "7",
+      is_active: true,
+      last_sync_at: daysAgo(0.1),
+      last_sync_stats: JSON.stringify({ processed: 8, created: 4, skipped: 2, pending: 2 }),
+    });
+  }
+
   // ── Follow-up Reminders ───────────────────────────────────────
   await Promise.all([
-    base44.entities.FollowUpReminder.create({
+    sr.entities.FollowUpReminder.create({
       workspace_id,
       lead_id: createdLeads[3].id,
       lead_name: createdLeads[3].name,
@@ -274,7 +295,7 @@ async function seedDemoData(base44, workspace_id, user) {
       user_email: user.email,
       dismiss_reason: M,
     }),
-    base44.entities.FollowUpReminder.create({
+    sr.entities.FollowUpReminder.create({
       workspace_id,
       lead_id: createdLeads[1].id,
       lead_name: createdLeads[1].name,
@@ -286,7 +307,7 @@ async function seedDemoData(base44, workspace_id, user) {
       user_email: user.email,
       dismiss_reason: M,
     }),
-    base44.entities.FollowUpReminder.create({
+    sr.entities.FollowUpReminder.create({
       workspace_id,
       lead_id: createdLeads[5].id,
       lead_name: createdLeads[5].name,
@@ -301,7 +322,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ]);
 
   // ── ICP Profile ───────────────────────────────────────────────
-  const icp = await base44.entities.IdealCustomerProfile.create({
+  const icp = await sr.entities.IdealCustomerProfile.create({
     workspace_id,
     name: "[Demo] B2B SaaS Growth Companies",
     industries: JSON.stringify(["SaaS", "Technology", "Fintech"]),
@@ -316,7 +337,7 @@ async function seedDemoData(base44, workspace_id, user) {
   });
 
   // ── Discovery Run ─────────────────────────────────────────────
-  const run = await base44.entities.DiscoveryRun.create({
+  const run = await sr.entities.DiscoveryRun.create({
     workspace_id,
     icp_id: icp.id,
     icp_name: icp.name,
@@ -438,7 +459,7 @@ async function seedDemoData(base44, workspace_id, user) {
   ];
 
   for (const pd of prospectsData) {
-    const prospect = await base44.entities.Prospect.create({
+    const prospect = await sr.entities.Prospect.create({
       workspace_id,
       company_name: pd.company_name,
       domain: pd.domain,
@@ -460,7 +481,7 @@ async function seedDemoData(base44, workspace_id, user) {
 
     await Promise.all([
       ...pd.signals.map((s, i) =>
-        base44.entities.ProspectSignal.create({
+        sr.entities.ProspectSignal.create({
           workspace_id,
           prospect_id: prospect.id,
           signal_type: s.type,
@@ -471,7 +492,7 @@ async function seedDemoData(base44, workspace_id, user) {
         })
       ),
       ...pd.contacts.map(c =>
-        base44.entities.ProspectContact.create({
+        sr.entities.ProspectContact.create({
           workspace_id,
           prospect_id: prospect.id,
           name: c.name,
@@ -485,9 +506,11 @@ async function seedDemoData(base44, workspace_id, user) {
   }
 
   return {
-    seeded: true,
     leads_created: createdLeads.length,
+    campaigns_created: 3,
     prospects_created: prospectsData.length,
-    ingestion_logs_created: ingestionLogs.length,
+    ingestion_logs_created: ingestionLogsData.length,
+    reminders_created: 3,
+    intent_scores_created: intentData.length,
   };
 }
