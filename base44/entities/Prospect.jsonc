@@ -1,0 +1,100 @@
+{
+  "name": "Prospect",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "company_name": {
+      "type": "string",
+      "title": "Company Name"
+    },
+    "website": {
+      "type": "string",
+      "title": "Website"
+    },
+    "domain": {
+      "type": "string",
+      "title": "Domain"
+    },
+    "industry": {
+      "type": "string",
+      "title": "Industry"
+    },
+    "employee_count": {
+      "type": "number",
+      "title": "Employee Count"
+    },
+    "revenue_range": {
+      "type": "string",
+      "title": "Revenue Range"
+    },
+    "location": {
+      "type": "string",
+      "title": "Location"
+    },
+    "linkedin_url": {
+      "type": "string",
+      "title": "LinkedIn URL"
+    },
+    "source": {
+      "type": "string",
+      "title": "Discovery Source"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "New",
+        "Saved",
+        "Dismissed",
+        "Converted"
+      ],
+      "default": "New"
+    },
+    "fit_score": {
+      "type": "number",
+      "title": "Fit Score (0-100)"
+    },
+    "timing_score": {
+      "type": "number",
+      "title": "Timing Score (0-100)"
+    },
+    "opportunity_score": {
+      "type": "number",
+      "title": "Opportunity Score (0-100)"
+    },
+    "ai_summary": {
+      "type": "string",
+      "title": "AI Summary"
+    },
+    "recommended_angle": {
+      "type": "string",
+      "title": "Recommended Outreach Angle"
+    },
+    "icp_id": {
+      "type": "string",
+      "title": "ICP ID"
+    },
+    "discovery_run_id": {
+      "type": "string",
+      "title": "Discovery Run ID"
+    }
+  },
+  "required": [
+    "company_name"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

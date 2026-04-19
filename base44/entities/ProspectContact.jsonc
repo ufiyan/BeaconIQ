@@ -1,0 +1,54 @@
+{
+  "name": "ProspectContact",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "prospect_id": {
+      "type": "string",
+      "title": "Prospect ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Full Name"
+    },
+    "title": {
+      "type": "string",
+      "title": "Job Title"
+    },
+    "email": {
+      "type": "string",
+      "title": "Email"
+    },
+    "linkedin_url": {
+      "type": "string",
+      "title": "LinkedIn URL"
+    },
+    "seniority_score": {
+      "type": "number",
+      "title": "Seniority Score (0-100)"
+    },
+    "decision_maker_likelihood": {
+      "type": "number",
+      "title": "Decision Maker Likelihood (0-100)"
+    }
+  },
+  "required": [
+    "prospect_id",
+    "name"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

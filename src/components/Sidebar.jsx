@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest, FileText } from "lucide-react";
+import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest, FileText, Telescope, Target } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useState, useEffect } from "react";
@@ -10,6 +10,13 @@ const navGroups = [
       { label: "Dashboard", icon: LayoutDashboard, path: "/" },
       { label: "Leads", icon: Users, path: "/leads" },
       { label: "Campaigns", icon: Zap, path: "/campaigns" },
+    ]
+  },
+  {
+    label: "DISCOVER",
+    items: [
+      { label: "Prospect Discovery", subtitle: "Find outbound opportunities", icon: Telescope, path: "/prospect-discovery" },
+      { label: "ICP Settings", subtitle: "Define your ideal customer", icon: Target, path: "/icp-settings" },
     ]
   },
   {
@@ -61,6 +68,9 @@ export default function Sidebar({ onClose }) {
         {navGroups.map((group, gi) => (
           <div key={gi}>
             {gi > 0 && <div className="my-2 mx-2" style={{ borderTop: "1px solid hsl(var(--sidebar-border))" }} />}
+            {group.label && (
+              <p className="px-3 pt-1 pb-1 text-xs font-semibold tracking-widest" style={{ color: "#3B82F6", opacity: 0.7 }}>{group.label}</p>
+            )}
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = location.pathname === item.path ||

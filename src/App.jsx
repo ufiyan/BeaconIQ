@@ -19,6 +19,8 @@ import EmailIngestion from './pages/EmailIngestion';
 import ReviewQueue from './pages/ReviewQueue';
 import OAuthCallback from './pages/OAuthCallback';
 import Templates from './pages/Templates';
+import ProspectDiscovery from './pages/ProspectDiscovery';
+import ICPSettings from './pages/ICPSettings';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -57,6 +59,8 @@ const AuthenticatedApp = () => {
         <Route path="/email-ingestion" element={<ErrorBoundary><EmailIngestion /></ErrorBoundary>} />
         <Route path="/review-queue" element={<ErrorBoundary><ReviewQueue /></ErrorBoundary>} />
         <Route path="/templates" element={<ErrorBoundary><Templates /></ErrorBoundary>} />
+        <Route path="/prospect-discovery" element={<ErrorBoundary><ProspectDiscovery /></ErrorBoundary>} />
+        <Route path="/icp-settings" element={<ErrorBoundary><ICPSettings /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
