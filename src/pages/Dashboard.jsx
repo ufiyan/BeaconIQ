@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import IntentScoreBadge from "../components/IntentScoreBadge";
-import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2, Clock, Sparkles } from "lucide-react";
+import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2, Clock, Sparkles, Telescope, FlaskConical } from "lucide-react";
 import { Link } from "react-router-dom";
 import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
@@ -38,13 +38,14 @@ export default function Dashboard() {
   const [ingestionLogs, setIngestionLogs] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [reminders, setReminders] = useState([]);
+  const [prospects, setProspects] = useState([]);
 
   useEffect(() => {
     if (workspaceLoading || !workspace) return;
     async function load() {
       const user = await base44.auth.me();
       const wf = { workspace_id: workspace.id };
-      const [l, c, e, s, isl, ill, rem] = await Promise.all([
+      const [l, c, e, s, isl, ill, rem, pros] = await Promise.all([
         base44.entities.Lead.filter(wf, "-created_date", 100),
         base44.entities.Campaign.filter(wf, "-created_date", 10),
         base44.entities.EmailLog.filter(wf, "-created_date", 20),
@@ -52,6 +53,7 @@ export default function Dashboard() {
         base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, "-created_date", 1).catch(() => []),
         base44.entities.EmailIngestionLog.filter(wf, "-created_date", 5).catch(() => []),
         base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-due_date", 20).catch(() => []),
+        base44.entities.Prospect.filter(wf, "-opportunity_score", 50).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);
@@ -60,14 +62,13 @@ export default function Dashboard() {
       setIngestionSettings(isl[0] || null);
       setIngestionLogs(ill);
       setReminders(rem);
+      setProspects(pros);
       setLoading(false);
     }
     load();
   }, [workspace, workspaceLoading]);
 
-  if (workspaceLoading || loading) {
-    return <SkeletonDashboard />;
-  }
+  if (workspaceLoading || loading) return <SkeletonDashboard />;
 
   const totalLeads = leads.length;
   const totalSent = emails.filter(e => e.status === "Sent" || e.status === "Delivered").length;
@@ -75,6 +76,8 @@ export default function Dashboard() {
   const meetings = leads.filter(l => l.status === "Meeting Booked").length;
   const contacted = leads.filter(l => l.status !== "New").length;
   const recentLeads = leads.slice(0, 7);
+  const activeProspects = prospects.filter(p => p.status === "New" || p.status === "Saved");
+  const topProspects = [...activeProspects].slice(0, 3);
 
   const stageCounts = {};
   PIPELINE_STAGES.forEach(s => { stageCounts[s] = leads.filter(l => l.status === s).length; });
@@ -86,13 +89,30 @@ export default function Dashboard() {
     .sort((a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0))
     .slice(0, 5);
 
+  const isEmpty = totalLeads === 0 && prospects.length === 0;
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-medium text-white" style={{ fontSize: "18px" }}>Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
-          <span className="text-xs" style={{ color: "#94A3B8" }}>BeaconIQ synced · {moment().format("h:mm A")}</span>
+        <div>
+          <h1 className="font-semibold text-white" style={{ fontSize: "20px" }}>Dashboard</h1>
+          <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>Your outbound intelligence command center</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {isEmpty && (
+            <Link
+              to="/settings?tab=demo"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+              style={{ background: "rgba(139,92,246,0.15)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.3)" }}
+            >
+              <FlaskConical className="h-3.5 w-3.5" /> Load Demo Data
+            </Link>
+          )}
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
+            <span className="text-xs" style={{ color: "#94A3B8" }}>Live · {moment().format("h:mm A")}</span>
+          </div>
         </div>
       </div>
 
@@ -100,6 +120,7 @@ export default function Dashboard() {
         <GettingStartedBanner workspace={workspace} ingestionSettings={ingestionSettings} />
       )}
 
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard icon={Users} label="Total Leads" value={totalLeads} accentColor="#3B82F6" />
         <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accentColor="#2DD4BF" />
@@ -107,24 +128,65 @@ export default function Dashboard() {
         <StatsCard icon={Calendar} label="Meetings Booked" value={meetings} accentColor="#10B981" />
       </div>
 
-      <div className="rounded-xl p-5 mb-6" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-        <p className="text-xs font-medium text-white mb-4">Lead Pipeline</p>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          {PIPELINE_STAGES.map(stage => (
-            <div key={stage} className="flex flex-col items-center rounded-lg p-3" style={{ background: "hsl(var(--secondary))" }}>
-              <span className="text-xl font-medium text-white">{stageCounts[stage]}</span>
-              <span className="text-xs mt-1 text-center" style={{ color: "#94A3B8" }}>{stage}</span>
-              <div className="mt-2 h-1 w-full rounded-full" style={{ background: STAGE_COLORS[stage], opacity: 0.7 }} />
+      {/* Discovery + Pipeline row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Pipeline */}
+        <div className="lg:col-span-2 rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+          <p className="text-xs font-medium text-white mb-4">Inbound Pipeline</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {PIPELINE_STAGES.map(stage => (
+              <div key={stage} className="flex flex-col items-center rounded-lg p-3" style={{ background: "hsl(var(--secondary))" }}>
+                <span className="text-xl font-semibold text-white">{stageCounts[stage]}</span>
+                <span className="text-xs mt-1 text-center leading-tight" style={{ color: "#94A3B8" }}>{stage}</span>
+                <div className="mt-2 h-1 w-full rounded-full" style={{ background: STAGE_COLORS[stage], opacity: 0.7 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Discovery snapshot */}
+        <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Telescope className="h-4 w-4" style={{ color: "#3B82F6" }} />
+              <p className="text-xs font-medium text-white">Prospect Discovery</p>
             </div>
-          ))}
+            <Link to="/prospect-discovery" className="text-xs" style={{ color: "#3B82F6" }}>View all →</Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
+              <p className="text-2xl font-bold text-white">{activeProspects.length}</p>
+              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Active</p>
+            </div>
+            <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
+              <p className="text-2xl font-bold" style={{ color: "#10B981" }}>{prospects.filter(p => p.status === "Converted").length}</p>
+              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Converted</p>
+            </div>
+          </div>
+          {topProspects.length > 0 ? topProspects.map(p => (
+            <Link key={p.id} to="/prospect-discovery" className="flex items-center justify-between py-2 group" style={{ borderTop: "0.5px solid hsl(var(--border))", textDecoration: "none" }}>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-white truncate group-hover:text-blue-400 transition-colors">{p.company_name}</p>
+                <p className="text-xs truncate" style={{ color: "#64748B" }}>{p.industry}</p>
+              </div>
+              <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: p.opportunity_score >= 75 ? "#10B981" : "#F59E0B" }}>{p.opportunity_score}</span>
+            </Link>
+          )) : (
+            <div className="text-center py-3">
+              <p className="text-xs" style={{ color: "#64748B" }}>No prospects yet</p>
+              <Link to="/prospect-discovery" className="text-xs" style={{ color: "#3B82F6" }}>Run discovery →</Link>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* High Intent */}
       {highIntentLeads.length > 0 && (
         <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
             <span className="h-2 w-2 rounded-full" style={{ background: "#F59E0B" }} />
             <p className="text-xs font-medium text-white">High Intent Leads</p>
+            <span className="text-xs ml-1" style={{ color: "#64748B" }}>— scored by AI from behavioral + email signals</span>
             <span className="text-xs ml-auto" style={{ color: "#94A3B8" }}>Top {highIntentLeads.length} by IQ Score</span>
           </div>
           {highIntentLeads.map(lead => (
@@ -136,7 +198,7 @@ export default function Dashboard() {
                   <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
                 </div>
               </div>
-              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
+              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg transition-colors flex-shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
                 Generate Email →
               </Link>
             </div>
@@ -144,8 +206,9 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Follow-up Due */}
       {reminders.length > 0 && (
-        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid rgba(245,158,11,0.4)" }}>
+        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid rgba(245,158,11,0.3)" }}>
           <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
             <Clock className="h-3.5 w-3.5" style={{ color: "#F59E0B" }} />
             <p className="text-xs font-medium text-white">Follow-up Due</p>
@@ -168,7 +231,7 @@ export default function Dashboard() {
                   <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{r.lead_company || ''} · {r.days_since_contact}d ago</p>
                 </div>
               </div>
-              <Link to={`/leads/${r.lead_id}`} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
+              <Link to={`/leads/${r.lead_id}`} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors flex-shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
                 <Sparkles className="h-3 w-3" /> Follow-up
               </Link>
             </div>
@@ -176,6 +239,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
@@ -214,6 +278,7 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-4">
+          {/* Gmail Sync widget */}
           <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-white">Lead Capture — Gmail</p>
@@ -233,10 +298,7 @@ export default function Dashboard() {
                     ]);
                     setIngestionSettings(isl[0] || null);
                     setIngestionLogs(ill);
-                    toast({
-                      title: "Sync complete",
-                      description: stats ? `${stats.created} new lead${stats.created !== 1 ? 's' : ''} found, ${stats.skipped} skipped` : "Sync finished",
-                    });
+                    toast({ title: "Sync complete", description: stats ? `${stats.created} new leads found, ${stats.skipped} skipped` : "Sync finished" });
                   } catch (err) {
                     toast({ title: "Sync failed", description: err.message || "Unknown error", variant: "destructive" });
                   } finally {
@@ -248,10 +310,9 @@ export default function Dashboard() {
                 style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}
               >
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Check for new leads now
+                Sync now
               </button>
             </div>
-
             {ingestionSettings?.leads_inbox ? (
               <div className="mb-3">
                 <div className="flex items-center gap-1.5 mb-1">
@@ -268,7 +329,6 @@ export default function Dashboard() {
                 <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#3B82F6" }}>Set up Inbox Monitor →</Link>
               </div>
             )}
-
             {ingestionLogs.length > 0 && (
               <div className="space-y-1.5 mt-3">
                 {ingestionLogs.map(log => {
@@ -288,6 +348,7 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* Campaigns widget */}
           <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
               <p className="text-xs font-medium text-white">Active Campaigns</p>

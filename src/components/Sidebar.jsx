@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest, FileText, Telescope, Target } from "lucide-react";
+import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Radio, Inbox, GitPullRequest, FileText, Telescope, Target, FlaskConical } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useState, useEffect } from "react";
@@ -111,6 +111,15 @@ export default function Sidebar({ onClose }) {
             <p className="text-xs" style={{ color: "#94A3B8" }}>{user.role || "user"}</p>
           </div>
         )}
+        <Link
+          to="/settings?tab=demo"
+          onClick={onClose}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium w-full transition-colors mb-1"
+          style={{ color: "#8B5CF6", background: "rgba(139,92,246,0.08)" }}
+        >
+          <FlaskConical className="h-[15px] w-[15px]" />
+          Demo & Testing
+        </Link>
         <button
           onClick={() => base44.auth.logout()}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors"

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
+import DemoDataPanel from "@/components/DemoDataPanel";
 
 export default function Settings() {
   const [profile, setProfile] = useState(null);
@@ -88,7 +89,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-border flex-wrap">
-        {[['profile','Business Profile'],['workspace','Workspace'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders']].map(([id, label]) => (
+        {[['profile','Business Profile'],['workspace','Workspace'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders'],['demo','Demo & Testing']].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
@@ -192,6 +193,12 @@ export default function Settings() {
       )}
 
       {activeTab === 'workspace' && <WorkspaceSettingsTab />}
+      {activeTab === 'demo' && (
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: "#94A3B8" }}>Load a realistic sample workspace to explore every feature of BeaconIQ without needing real data or external integrations.</p>
+          <DemoDataPanel />
+        </div>
+      )}
 
       {activeTab === 'ingestion' && <EmailIngestionTab />}
 

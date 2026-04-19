@@ -185,6 +185,21 @@ export default function ProspectDiscovery() {
               </div>
             </div>
 
+            {/* Score Legend */}
+            <div className="flex flex-wrap gap-4 mb-4 px-1">
+              {[
+                { label: "Fit Score", desc: "How well the company matches your ICP (industry, size, location)", color: "#3B82F6" },
+                { label: "Timing Score", desc: "How strong & recent their buying signals are", color: "#F59E0B" },
+                { label: "Opportunity Score", desc: "Combined weighted score — prioritize by this", color: "#10B981" },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                  <span className="text-xs font-medium" style={{ color: s.color }}>{s.label}</span>
+                  <span className="text-xs hidden sm:inline" style={{ color: "#475569" }}>— {s.desc}</span>
+                </div>
+              ))}
+            </div>
+
             {/* Stats Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               {[
