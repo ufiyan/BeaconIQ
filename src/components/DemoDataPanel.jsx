@@ -15,6 +15,20 @@ const CHECKLIST = [
   { id: 7, label: "Check Dashboard metrics", sub: "Confirm pipeline and KPI cards updated", path: "/" },
 ];
 
+async function invokeDemoAction(action, workspaceId) {
+  const candidates = ["loadDemoData", "seedDemoData", "demoData"];
+  let lastErr = null;
+  for (const fn of candidates) {
+    try {
+      const res = await base44.functions.invoke(fn, { action, workspace_id: workspaceId });
+      return { res, fn };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
 export default function DemoDataPanel() {
   const { workspace } = useWorkspace();
   const { toast } = useToast();
@@ -25,23 +39,28 @@ export default function DemoDataPanel() {
   const [checked, setChecked] = useState({});
 
   const handleSeed = async () => {
-    if (!workspace?.id) return toast({ title: "No workspace found", variant: "destructive" });
+    if (!workspace?.id) {
+      toast({ title: "No workspace found", description: "Please refresh and try again.", variant: "destructive" });
+      return;
+    }
+    if (seeding) return;
     setSeeding(true);
     try {
-      const res = await base44.functions.invoke("loadDemoData", { action: "seed", workspace_id: workspace.id });
-      const d = res.data;
+      const { res, fn } = await invokeDemoAction("seed", workspace.id);
+      const d = res?.data || res || {};
       if (d.already_seeded) {
         toast({ title: "Demo data already loaded", description: "Click 'Clear Demo Data' first, then re-seed." });
       } else {
         setDone("seeded");
-        toast({
-          title: "Demo workspace ready!",
-          description: `${d.leads_created} leads · ${d.prospects_created} prospects · ${d.campaigns_created} campaigns · ${d.ingestion_logs_created} inbox logs seeded.`,
-        });
+        const desc = d.leads_created
+          ? `${d.leads_created} leads · ${d.prospects_created} prospects · ${d.campaigns_created} campaigns · ${d.ingestion_logs_created} inbox logs seeded.`
+          : (d.message || `Sample data loaded successfully using ${fn}.`);
+        toast({ title: "Demo workspace ready!", description: desc });
         setTimeout(() => window.location.reload(), 1500);
       }
     } catch (e) {
-      toast({ title: "Error loading demo data", description: e.message, variant: "destructive" });
+      const msg = e?.response?.data?.error || e?.data?.error || e?.message || "The demo loader function is missing from the current deployment.";
+      toast({ title: "Error loading demo data", description: msg, variant: "destructive" });
     } finally {
       setSeeding(false);
     }
@@ -51,12 +70,14 @@ export default function DemoDataPanel() {
     if (!workspace?.id) return;
     setClearing(true);
     try {
-      await base44.functions.invoke("loadDemoData", { action: "clear", workspace_id: workspace.id });
+      const { res, fn } = await invokeDemoAction("clear", workspace.id);
+      const d = res?.data || res || {};
       setDone("cleared");
-      toast({ title: "Demo data cleared" });
+      toast({ title: "Demo data cleared", description: d.message || `Demo records cleared using ${fn}.` });
       setTimeout(() => window.location.reload(), 1000);
     } catch (e) {
-      toast({ title: "Error clearing demo data", description: e.message, variant: "destructive" });
+      const msg = e?.response?.data?.error || e?.data?.error || e?.message || "The demo clear function is missing from the current deployment.";
+      toast({ title: "Error clearing demo data", description: msg, variant: "destructive" });
     } finally {
       setClearing(false);
     }
