@@ -5,30 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Loader2, Mail, Sparkles, Building2, ArrowRight, Inbox } from "lucide-react";
-
-const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/userinfo.email",
-  "openid",
-].join(" ");
-
-const GMAIL_REDIRECT_URI = "https://app.base44.com/oauth/callback";
-
-function getGmailOAuthUrl(workspaceId) {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
-  if (!clientId) return null;
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: GMAIL_REDIRECT_URI,
-    response_type: "code",
-    scope: GMAIL_SCOPES,
-    access_type: "offline",
-    prompt: "consent",
-    state: workspaceId || "onboarding",
-  });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-}
+import { buildGmailOAuthUrl, getOAuthRedirectUri } from "@/lib/oauthRedirect";
 
 const STEPS = [
   { id: 1, label: "Workspace", icon: Building2 },
@@ -109,9 +86,9 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   // Step 2: Trigger Gmail OAuth — opens popup, starts postMessage listener + polling
   const handleConnectGmail = () => {
     if (!workspace) return;
-    const url = getGmailOAuthUrl(workspace.id);
+    const url = buildGmailOAuthUrl(workspace.id);
     if (!url) {
-      alert("Gmail connection is not configured.");
+      alert("Gmail connection is not configured. Please set VITE_GOOGLE_CLIENT_ID.");
       return;
     }
     window.open(url, "_blank", "width=500,height=650");
@@ -272,6 +249,12 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
                       Complete sign-in in the popup window — this page will update automatically.
                     </p>
                   )}
+                  <div className="flex items-start gap-2 p-3 rounded-lg" style={{ background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.25)" }}>
+                    <span className="text-amber-400 text-sm flex-shrink-0 mt-0.5">⚠</span>
+                    <p className="text-xs text-muted-foreground">
+                      If Google shows <strong className="text-amber-300">"Google hasn't verified this app"</strong>, the OAuth consent screen is in Testing mode. Go to <strong className="text-white">Google Cloud Console → OAuth consent screen → Test users</strong> and add the Gmail address you want to connect.
+                    </p>
+                  </div>
                 </>
               )}
               <div className="flex gap-3">

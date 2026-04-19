@@ -35,31 +35,76 @@ export async function getValidAccessToken(settings, base44, clientId, clientSecr
   return settings.gmail_access_token;
 }
 
+async function logError(base44, functionName, message, context) {
+  try {
+    await base44.asServiceRole.entities.ErrorLog.create({
+      function_name: functionName,
+      error_message: message,
+      timestamp: new Date().toISOString(),
+      context: JSON.stringify(context || {}),
+    });
+  } catch (_) {
+    // non-fatal — don't let error logging break the response
+  }
+}
+
 Deno.serve(async (req) => {
   console.log('[connectGmail] Function called');
 
+  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
+  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+
+  if (!clientId || !clientSecret) {
+    console.error('[connectGmail] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
+    return Response.json({ success: false, error: 'Server misconfiguration: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set. Contact your administrator.' }, { status: 500 });
+  }
+
+  let body;
   try {
-    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-    if (!clientId || !clientSecret) {
-      return Response.json({ success: false, error: 'Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET' }, { status: 500 });
-    }
+    body = await req.json();
+  } catch (_) {
+    return Response.json({ success: false, error: 'Invalid request body — expected JSON' }, { status: 400 });
+  }
 
-    const body = await req.json();
-    console.log('[connectGmail] Body received:', JSON.stringify({ ...body, code: body.code ? body.code.slice(0, 20) + '...' : null }));
+  console.log('[connectGmail] Body received:', JSON.stringify({ ...body, code: body.code ? body.code.slice(0, 20) + '...' : null }));
 
-    const { code, workspace_id, state } = body;
-    const finalWorkspaceId = workspace_id || state;
+  const { code, workspace_id, state, redirect_uri } = body;
+  const finalWorkspaceId = workspace_id || state;
 
-    if (!code) {
-      return Response.json({ success: false, error: 'No authorization code provided' }, { status: 400 });
-    }
-    if (!finalWorkspaceId) {
-      return Response.json({ success: false, error: 'No workspace_id provided — cannot store tokens safely' }, { status: 400 });
-    }
+  if (!code) {
+    return Response.json({
+      success: false,
+      error: 'No authorization code provided. This usually means the OAuth redirect URI is misconfigured, or the user cancelled the consent screen.',
+    }, { status: 400 });
+  }
 
-    // Exchange code for tokens
-    console.log('[connectGmail] Exchanging code for tokens...');
+  if (!finalWorkspaceId) {
+    return Response.json({
+      success: false,
+      error: 'No workspace_id provided in state parameter — cannot store tokens safely.',
+    }, { status: 400 });
+  }
+
+  // Use the redirect_uri from the request (sent by the frontend), falling back to a canonical default
+  const effectiveRedirectUri = redirect_uri || 'https://app.base44.com/oauth/callback';
+  console.log('[connectGmail] Using redirect_uri:', effectiveRedirectUri);
+
+  const base44 = createClientFromRequest(req);
+
+  // Authenticate the calling user
+  let authUser;
+  try {
+    authUser = await base44.auth.me();
+  } catch (_) {}
+  if (!authUser) {
+    return Response.json({ success: false, error: 'Unauthorized — please log in and try again.' }, { status: 401 });
+  }
+  const authenticatedEmail = authUser.email;
+
+  // Exchange code for tokens
+  console.log('[connectGmail] Exchanging code for tokens...');
+  let tokenData;
+  try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -67,37 +112,47 @@ Deno.serve(async (req) => {
         code,
         client_id: clientId,
         client_secret: clientSecret,
-        redirect_uri: 'https://app.base44.com/oauth/callback',
+        redirect_uri: effectiveRedirectUri,
         grant_type: 'authorization_code',
       }),
     });
 
-    const tokenData = await tokenRes.json();
+    tokenData = await tokenRes.json();
     console.log('[connectGmail] Token response status:', tokenRes.status, '| keys:', Object.keys(tokenData));
 
     if (!tokenData.access_token) {
-      return Response.json({ success: false, error: 'Token exchange failed', details: tokenData }, { status: 400 });
-    }
+      const reason = tokenData.error_description || tokenData.error || 'unknown';
+      const isRedirectMismatch = tokenData.error === 'redirect_uri_mismatch';
+      const message = isRedirectMismatch
+        ? `Redirect URI mismatch. The URI sent to Google (${effectiveRedirectUri}) must exactly match one registered in Google Cloud Console → Credentials → OAuth 2.0 Client → Authorized redirect URIs.`
+        : `Token exchange failed: ${reason}`;
 
-    // Get Gmail email
+      await logError(base44, 'connectGmail', message, { tokenError: tokenData, redirect_uri: effectiveRedirectUri, workspace_id: finalWorkspaceId });
+      return Response.json({ success: false, error: message }, { status: 400 });
+    }
+  } catch (fetchErr) {
+    const msg = `Network error during token exchange: ${fetchErr.message}`;
+    await logError(base44, 'connectGmail', msg, { workspace_id: finalWorkspaceId });
+    return Response.json({ success: false, error: msg }, { status: 500 });
+  }
+
+  // Get Gmail profile
+  let gmailEmail = null;
+  try {
     const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const userData = await userRes.json();
-    console.log('[connectGmail] Gmail email:', userData.email);
+    gmailEmail = userData.email || null;
+    console.log('[connectGmail] Gmail email:', gmailEmail);
+  } catch (_) {
+    console.warn('[connectGmail] Could not fetch Gmail user profile (non-fatal)');
+  }
 
-    const base44 = createClientFromRequest(req);
+  const tokenExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
 
-    // Authenticate the calling user
-    const authUser = await base44.auth.me();
-    if (!authUser) {
-      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-    const authenticatedEmail = authUser.email;
-
-    const tokenExpiry = Date.now() + (tokenData.expires_in ?? 3600) * 1000;
-
-    // Store tokens on EmailIngestionSettings (scoped to workspace)
+  // Store tokens on EmailIngestionSettings (scoped to workspace)
+  try {
     console.log('[connectGmail] Looking up EmailIngestionSettings for workspace:', finalWorkspaceId);
     const settingsList = await base44.asServiceRole.entities.EmailIngestionSettings.filter(
       { workspace_id: finalWorkspaceId }, '-created_date', 1
@@ -105,7 +160,6 @@ Deno.serve(async (req) => {
 
     if (settingsList.length) {
       const existing = settingsList[0];
-      // Security check: ensure the record belongs to the authenticated user
       if (existing.created_by && existing.created_by !== authenticatedEmail) {
         console.error('[connectGmail] Ownership mismatch — refusing to update');
         return Response.json({ success: false, error: 'Forbidden: record does not belong to you' }, { status: 403 });
@@ -115,7 +169,7 @@ Deno.serve(async (req) => {
         gmail_access_token: tokenData.access_token,
         gmail_refresh_token: tokenData.refresh_token ?? existing.gmail_refresh_token ?? null,
         gmail_token_expiry: tokenExpiry,
-        gmail_email: userData.email,
+        gmail_email: gmailEmail,
         gmail_connected: true,
         created_by: authenticatedEmail,
       });
@@ -126,30 +180,30 @@ Deno.serve(async (req) => {
         gmail_access_token: tokenData.access_token,
         gmail_refresh_token: tokenData.refresh_token ?? null,
         gmail_token_expiry: tokenExpiry,
-        gmail_email: userData.email,
+        gmail_email: gmailEmail,
         gmail_connected: true,
         created_by: authenticatedEmail,
       });
     }
-
-    // Also mark workspace as connected for UI awareness
-    try {
-      const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: finalWorkspaceId }, '-created_date', 1);
-      if (workspaces.length) {
-        await base44.asServiceRole.entities.Workspace.update(workspaces[0].id, {
-          gmail_connected: true,
-          gmail_email: userData.email,
-        });
-      }
-    } catch (wsErr) {
-      console.warn('[connectGmail] Could not update Workspace record (non-fatal):', wsErr.message);
-    }
-
-    console.log('[connectGmail] Done — tokens stored on EmailIngestionSettings successfully');
-    return Response.json({ success: true, gmail_email: userData.email });
-
-  } catch (err) {
-    console.error('[connectGmail] Error:', err);
-    return Response.json({ success: false, error: err.message }, { status: 500 });
+  } catch (dbErr) {
+    const msg = `Failed to store Gmail tokens: ${dbErr.message}`;
+    await logError(base44, 'connectGmail', msg, { workspace_id: finalWorkspaceId });
+    return Response.json({ success: false, error: msg }, { status: 500 });
   }
+
+  // Also mark workspace as connected for UI awareness
+  try {
+    const workspaces = await base44.asServiceRole.entities.Workspace.filter({ id: finalWorkspaceId }, '-created_date', 1);
+    if (workspaces.length) {
+      await base44.asServiceRole.entities.Workspace.update(workspaces[0].id, {
+        gmail_connected: true,
+        gmail_email: gmailEmail,
+      });
+    }
+  } catch (wsErr) {
+    console.warn('[connectGmail] Could not update Workspace record (non-fatal):', wsErr.message);
+  }
+
+  console.log('[connectGmail] Done — tokens stored on EmailIngestionSettings successfully');
+  return Response.json({ success: true, gmail_email: gmailEmail });
 });
