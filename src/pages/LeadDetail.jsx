@@ -149,7 +149,31 @@ export default function LeadDetail() {
 
       <IntentScoreCard lead={lead} intentScore={intentScore} onRescore={loadData} />
 
-      {showGenerate && <GenerateEmailDialog lead={lead} onClose={() => { setShowGenerate(false); loadData(); }} />}
+      <GenerateEmailDialog open={showGenerate} lead={lead} onClose={() => { setShowGenerate(false); loadData(); }} onSuccess={loadData} />
+
+      {emails.length > 0 && (
+        <div className="rounded-xl overflow-hidden mt-6" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+          <div className="px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
+            <p className="text-xs font-medium text-white">Email History ({emails.length})</p>
+          </div>
+          {emails.map((email, idx) => (
+            <div key={email.id} className="px-5 py-3" style={{ borderBottom: idx < emails.length - 1 ? "0.5px solid hsl(var(--border))" : "none" }}>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-white truncate flex-1">{email.subject}</p>
+                <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                  <StatusBadge status={email.status} />
+                  <span className="text-xs" style={{ color: "#94A3B8" }}>{moment(email.sent_at || email.created_date).fromNow()}</span>
+                </div>
+              </div>
+              {email.body && (
+                <p className="text-xs line-clamp-2" style={{ color: "#94A3B8" }}
+                  dangerouslySetInnerHTML={{ __html: email.body.replace(/<[^>]+>/g, " ").slice(0, 200) }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

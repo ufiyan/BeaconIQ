@@ -93,6 +93,8 @@ Sample Data: ${JSON.stringify(sampleData)}`,
 
     // Fetch existing emails for duplicate check — scoped to current user only
     const user = await base44.auth.me();
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
     const existingLeads = await base44.entities.Lead.filter({ created_by: user.email }, "-created_date", 1000);
     const existingEmails = new Set(existingLeads.map(l => l.email?.toLowerCase()).filter(Boolean));
 
@@ -119,6 +121,7 @@ Sample Data: ${JSON.stringify(sampleData)}`,
 
       leadsToCreate.push({
         ...lead,
+        workspace_id: workspaceId,
         source: "CSV Upload",
         status: "New",
         priority: "Medium",

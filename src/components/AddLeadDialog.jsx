@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
+// base44.entities.Workspace used inline
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,10 @@ export default function AddLeadDialog({ open, onClose, onSuccess }) {
     e.preventDefault();
     if (!form.name || !form.email) return;
     setSaving(true);
-    await base44.entities.Lead.create({ ...form, source: "Manual Entry", status: "New" });
+    const user = await base44.auth.me();
+    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+    const workspaceId = workspaces[0]?.id;
+    await base44.entities.Lead.create({ ...form, workspace_id: workspaceId, source: "Manual Entry", status: "New" });
     toast({ title: "Lead added successfully" });
     setForm({ name: "", email: "", company: "", title: "", phone: "", priority: "Medium" });
     setSaving(false);
