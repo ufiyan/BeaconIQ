@@ -3,11 +3,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 /**
  * loadDemoData — BeaconIQ Demo / Sandbox Seeder
  * Seeds a full, realistic workspace across all entities.
- * Idempotent: keyed by notes/description containing DEMO_MARKER, never duplicates.
+ * Every record is tagged with is_demo: true and demo_batch for safe cleanup.
  * Action: "seed" | "clear"
  */
 
-const DEMO_MARKER = "__demo__";
+const DEMO_BATCH = "sample_workspace_v1";
+const DEMO_TAG = { is_demo: true, demo_batch: DEMO_BATCH };
 
 Deno.serve(async (req) => {
   try {
@@ -18,7 +19,6 @@ Deno.serve(async (req) => {
     const { action, workspace_id } = await req.json();
     if (!workspace_id) return Response.json({ error: 'workspace_id required' }, { status: 400 });
 
-    // Validate workspace ownership — list all and find by id
     const allWorkspaces = await base44.asServiceRole.entities.Workspace.list('-created_date', 200);
     const workspace = allWorkspaces.find(w => w.id === workspace_id);
     if (!workspace) return Response.json({ error: 'Workspace not found' }, { status: 404 });
@@ -29,10 +29,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'seed') {
-      // Idempotency: check if already seeded
-      const allLeads = await base44.asServiceRole.entities.Lead.filter({ workspace_id }, '-created_date', 50);
-      const existing = allLeads.filter(l => l.notes?.includes(DEMO_MARKER));
-      if (existing.length > 0) {
+      // Idempotency: check for existing demo leads by tag
+      const existingLeads = await base44.asServiceRole.entities.Lead.filter({ workspace_id, is_demo: true }, '-created_date', 1);
+      if (existingLeads.length > 0) {
         return Response.json({ success: true, already_seeded: true, message: 'Demo data already loaded. Clear first to re-seed.' });
       }
 
@@ -62,49 +61,43 @@ Deno.serve(async (req) => {
 
 async function clearDemoData(base44, workspace_id) {
   const sr = base44.asServiceRole;
-  const [leads, campaigns, emails, logs, reminders, ingestion, intentScores, icps, prospects, signals, contacts, runs, businessProfiles] = await Promise.all([
-    sr.entities.Lead.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.Campaign.filter({ workspace_id }, '-created_date', 50),
-    sr.entities.EmailLog.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.EmailIngestionLog.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.FollowUpReminder.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.EmailIngestionSettings.filter({ workspace_id }, '-created_date', 10),
-    sr.entities.IntentScore.filter({ workspace_id }, '-created_date', 200),
-    sr.entities.IdealCustomerProfile.filter({ workspace_id }, '-created_date', 20),
-    sr.entities.Prospect.filter({ workspace_id }, '-created_date', 200),
-    sr.entities.ProspectSignal.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.ProspectContact.filter({ workspace_id }, '-created_date', 500),
-    sr.entities.DiscoveryRun.filter({ workspace_id }, '-created_date', 50),
-    sr.entities.BusinessProfile.filter({ workspace_id }, '-created_date', 10),
+  const demoFilter = { workspace_id, is_demo: true };
+
+  // Fetch all demo-tagged records across all entities
+  const [leads, campaigns, emails, ingestionLogs, reminders, ingestionSettings,
+         intentScores, icps, prospects, signals, contacts, runs, businessProfiles] = await Promise.all([
+    sr.entities.Lead.filter(demoFilter, '-created_date', 500),
+    sr.entities.Campaign.filter(demoFilter, '-created_date', 50),
+    sr.entities.EmailLog.filter(demoFilter, '-created_date', 500),
+    sr.entities.EmailIngestionLog.filter(demoFilter, '-created_date', 500),
+    sr.entities.FollowUpReminder.filter(demoFilter, '-created_date', 500),
+    sr.entities.EmailIngestionSettings.filter(demoFilter, '-created_date', 10),
+    sr.entities.IntentScore.filter(demoFilter, '-created_date', 200),
+    sr.entities.IdealCustomerProfile.filter(demoFilter, '-created_date', 20),
+    sr.entities.Prospect.filter(demoFilter, '-created_date', 200),
+    sr.entities.ProspectSignal.filter(demoFilter, '-created_date', 500),
+    sr.entities.ProspectContact.filter(demoFilter, '-created_date', 500),
+    sr.entities.DiscoveryRun.filter(demoFilter, '-created_date', 50),
+    sr.entities.BusinessProfile.filter(demoFilter, '-created_date', 10),
   ]);
 
-  const demoLeads = leads.filter(l => l.notes?.includes(DEMO_MARKER));
-  const demoCampaigns = campaigns.filter(c => c.description?.includes(DEMO_MARKER));
-  const demoEmails = emails.filter(e => e.body?.includes(DEMO_MARKER));
-  const demoLogs = logs.filter(l => l.body_preview?.includes(DEMO_MARKER));
-  const demoReminders = reminders.filter(r => r.dismiss_reason?.includes(DEMO_MARKER));
-  const demoIngestion = ingestion.filter(i => i.keywords?.includes(DEMO_MARKER));
-  const demoIntentScores = intentScores.filter(s => s.source_text?.includes(DEMO_MARKER));
-  const demoICPs = icps.filter(i => i.name?.includes('[Demo]'));
-  const demoProspects = prospects.filter(p => p.source === 'AI Discovery' || p.ai_summary?.includes(DEMO_MARKER));
-  const demoBusinessProfiles = businessProfiles.filter(bp => bp.website?.includes('apexgrowthpartners.com'));
-
-  const deleteAll = (entity, items) => Promise.all(items.map(i => sr.entities[entity].delete(i.id).catch(() => {})));
+  const deleteAll = (entity, items) =>
+    Promise.all(items.map(i => sr.entities[entity].delete(i.id).catch(() => {})));
 
   await Promise.all([
-    deleteAll('Lead', demoLeads),
-    deleteAll('Campaign', demoCampaigns),
-    deleteAll('EmailLog', demoEmails),
-    deleteAll('EmailIngestionLog', demoLogs),
-    deleteAll('FollowUpReminder', demoReminders),
-    deleteAll('EmailIngestionSettings', demoIngestion),
-    deleteAll('IntentScore', demoIntentScores),
-    deleteAll('IdealCustomerProfile', demoICPs),
-    deleteAll('Prospect', demoProspects),
+    deleteAll('Lead', leads),
+    deleteAll('Campaign', campaigns),
+    deleteAll('EmailLog', emails),
+    deleteAll('EmailIngestionLog', ingestionLogs),
+    deleteAll('FollowUpReminder', reminders),
+    deleteAll('EmailIngestionSettings', ingestionSettings),
+    deleteAll('IntentScore', intentScores),
+    deleteAll('IdealCustomerProfile', icps),
+    deleteAll('Prospect', prospects),
     deleteAll('ProspectSignal', signals),
     deleteAll('ProspectContact', contacts),
     deleteAll('DiscoveryRun', runs),
-    deleteAll('BusinessProfile', demoBusinessProfiles),
+    deleteAll('BusinessProfile', businessProfiles),
   ]);
 }
 
@@ -112,12 +105,12 @@ async function seedDemoData(base44, workspace_id, user) {
   const sr = base44.asServiceRole;
   const now = new Date();
   const daysAgo = (d) => new Date(now.getTime() - d * 86400000).toISOString();
-  const M = DEMO_MARKER;
 
   // ── Business Profile ──────────────────────────────────────────
   const existingProfiles = await sr.entities.BusinessProfile.filter({ workspace_id }, '-created_date', 1);
   if (!existingProfiles.length) {
     await sr.entities.BusinessProfile.create({
+      ...DEMO_TAG,
       workspace_id,
       business_name: "Apex Growth Partners",
       description: "We help B2B SaaS companies and marketing agencies scale their outbound pipeline using AI-driven lead intelligence and hyper-personalized email sequences.",
@@ -134,9 +127,10 @@ async function seedDemoData(base44, workspace_id, user) {
   // ── Campaigns ─────────────────────────────────────────────────
   const [campQ1, campOutbound, campNurture] = await Promise.all([
     sr.entities.Campaign.create({
+      ...DEMO_TAG,
       workspace_id,
       name: "Q1 SaaS Outreach",
-      description: `Campaign for Q1 SaaS targets ${M}`,
+      description: "Campaign for Q1 SaaS targets",
       status: "Active",
       total_leads: 18,
       total_sent: 34,
@@ -149,9 +143,10 @@ async function seedDemoData(base44, workspace_id, user) {
       ],
     }),
     sr.entities.Campaign.create({
+      ...DEMO_TAG,
       workspace_id,
       name: "Fintech Series B Targets",
-      description: `Outbound to post-Series B fintech ${M}`,
+      description: "Outbound to post-Series B fintech",
       status: "Active",
       total_leads: 11,
       total_sent: 18,
@@ -160,9 +155,10 @@ async function seedDemoData(base44, workspace_id, user) {
       steps: [],
     }),
     sr.entities.Campaign.create({
+      ...DEMO_TAG,
       workspace_id,
       name: "Re-Engagement: Cold Leads",
-      description: `Nurture sequence for cold leads ${M}`,
+      description: "Nurture sequence for cold leads",
       status: "Paused",
       total_leads: 42,
       total_sent: 42,
@@ -188,10 +184,11 @@ async function seedDemoData(base44, workspace_id, user) {
 
   const createdLeads = await Promise.all(
     leadsData.map(l => sr.entities.Lead.create({
+      ...DEMO_TAG,
       ...l,
       workspace_id,
       source: "Email Ingestion",
-      notes: `Discovered via BeaconIQ inbox monitor. ${M}`,
+      notes: "Discovered via BeaconIQ inbox monitor.",
     }))
   );
 
@@ -207,6 +204,7 @@ async function seedDemoData(base44, workspace_id, user) {
 
   await Promise.all(intentData.map(({ lead, score, urgency, pain, signals }) =>
     sr.entities.IntentScore.create({
+      ...DEMO_TAG,
       workspace_id,
       lead_id: lead.id,
       intent_score: score,
@@ -216,22 +214,23 @@ async function seedDemoData(base44, workspace_id, user) {
       urgency_signals: signals,
       scoring_rationale: `AI scored ${score}/100 based on behavioral signals and email engagement.`,
       scored_at: daysAgo(1),
-      source_text: `Analyzed from inbound email. ${M}`,
+      source_text: "Analyzed from inbound email.",
     })
   ));
 
   // ── Email Logs ────────────────────────────────────────────────
-  const emailLogs = [
-    { lead: createdLeads[0], subject: "Re: Scaling your outbound pipeline at Prism", body: `Hi Sarah, great connecting earlier this week — excited to demo next Tuesday. ${M}`, status: "Replied", sent_at: daysAgo(2) },
-    { lead: createdLeads[1], subject: "Quick question about DataLoop's pipeline", body: `Hi Marcus, saw your Series A announcement — congrats! ${M}`, status: "Opened", sent_at: daysAgo(3) },
-    { lead: createdLeads[2], subject: "ScalePath x Apex — partnership opportunity", body: `Hi Priya, we work with 3 agencies in your space... ${M}`, status: "Replied", sent_at: daysAgo(3) },
-    { lead: createdLeads[3], subject: "TradeStack's growth motion", body: `Hi Jordan, noticed TradeStack is hiring enterprise AEs... ${M}`, status: "Sent", sent_at: daysAgo(5) },
-    { lead: createdLeads[4], subject: "Helping VaultWorks hit Q2 pipeline targets", body: `Hi Alicia, your RevOps role posting caught my eye... ${M}`, status: "Opened", sent_at: daysAgo(4) },
-    { lead: createdLeads[7], subject: "FinVault — inbound lead intelligence", body: `Hi Derek, love what you're building at FinVault... ${M}`, status: "Sent", sent_at: daysAgo(6) },
+  const emailLogsData = [
+    { lead: createdLeads[0], subject: "Re: Scaling your outbound pipeline at Prism", body: "Hi Sarah, great connecting earlier this week — excited to demo next Tuesday.", status: "Replied", sent_at: daysAgo(2) },
+    { lead: createdLeads[1], subject: "Quick question about DataLoop's pipeline", body: "Hi Marcus, saw your Series A announcement — congrats!", status: "Opened", sent_at: daysAgo(3) },
+    { lead: createdLeads[2], subject: "ScalePath x Apex — partnership opportunity", body: "Hi Priya, we work with 3 agencies in your space...", status: "Replied", sent_at: daysAgo(3) },
+    { lead: createdLeads[3], subject: "TradeStack's growth motion", body: "Hi Jordan, noticed TradeStack is hiring enterprise AEs...", status: "Sent", sent_at: daysAgo(5) },
+    { lead: createdLeads[4], subject: "Helping VaultWorks hit Q2 pipeline targets", body: "Hi Alicia, your RevOps role posting caught my eye...", status: "Opened", sent_at: daysAgo(4) },
+    { lead: createdLeads[7], subject: "FinVault — inbound lead intelligence", body: "Hi Derek, love what you're building at FinVault...", status: "Sent", sent_at: daysAgo(6) },
   ];
 
-  await Promise.all(emailLogs.map(({ lead, subject, body, status, sent_at }) =>
+  await Promise.all(emailLogsData.map(({ lead, subject, body, status, sent_at }) =>
     sr.entities.EmailLog.create({
+      ...DEMO_TAG,
       workspace_id,
       lead_id: lead.id,
       lead_name: lead.name,
@@ -247,18 +246,19 @@ async function seedDemoData(base44, workspace_id, user) {
 
   // ── Email Ingestion Logs ──────────────────────────────────────
   const ingestionLogsData = [
-    { name: "Sarah Chen", email: "sarah.chen@prism.io", subject: "Interested in learning more", result: "lead_created", conf: 92, company: "Prism Analytics", preview: `Hi, I found your agency through a LinkedIn post... ${M}` },
-    { name: "Marcus Webb", email: "m.webb@dataloop.ai", subject: "Re: Scaling outbound at DataLoop", result: "lead_created", conf: 88, company: "DataLoop AI", preview: `We're post-Series A and need a repeatable process... ${M}` },
-    { name: "Anonymous", email: "info@techblog.co", subject: "Newsletter subscription", result: "skipped", conf: 12, company: "", preview: `You're subscribed to TechPulse Weekly... ${M}` },
-    { name: "Priya Nair", email: "priya@scalepath.com", subject: "Agency partnership inquiry", result: "lead_created", conf: 81, company: "ScalePath", preview: `We run paid media for 30+ SaaS clients... ${M}` },
-    { name: "Potential Lead", email: "contact@buildit.io", subject: "Question about your services", result: "pending_review", conf: 58, company: "BuildIt", preview: `Came across BeaconIQ and curious how it works for... ${M}` },
-    { name: "Derek Huang", email: "derek.huang@finvault.io", subject: "Exploring sales tooling options", result: "lead_created", conf: 74, company: "FinVault", preview: `Our team is evaluating several tools this quarter... ${M}` },
-    { name: "Unsubscribe Request", email: "noreply@marketing.co", subject: "Please remove me", result: "skipped", conf: 5, company: "", preview: `Please unsubscribe me from all communications... ${M}` },
-    { name: "Nina Patel", email: "nina@clearstride.com", subject: "Looking for outbound partner", result: "pending_review", conf: 63, company: "ClearStride", preview: `We're a 45-person SaaS company trying to build... ${M}` },
+    { name: "Sarah Chen", email: "sarah.chen@prism.io", subject: "Interested in learning more", result: "lead_created", conf: 92, company: "Prism Analytics", preview: "Hi, I found your agency through a LinkedIn post..." },
+    { name: "Marcus Webb", email: "m.webb@dataloop.ai", subject: "Re: Scaling outbound at DataLoop", result: "lead_created", conf: 88, company: "DataLoop AI", preview: "We're post-Series A and need a repeatable process..." },
+    { name: "Anonymous", email: "info@techblog.co", subject: "Newsletter subscription", result: "skipped", conf: 12, company: "", preview: "You're subscribed to TechPulse Weekly..." },
+    { name: "Priya Nair", email: "priya@scalepath.com", subject: "Agency partnership inquiry", result: "lead_created", conf: 81, company: "ScalePath", preview: "We run paid media for 30+ SaaS clients..." },
+    { name: "Potential Lead", email: "contact@buildit.io", subject: "Question about your services", result: "pending_review", conf: 58, company: "BuildIt", preview: "Came across BeaconIQ and curious how it works for..." },
+    { name: "Derek Huang", email: "derek.huang@finvault.io", subject: "Exploring sales tooling options", result: "lead_created", conf: 74, company: "FinVault", preview: "Our team is evaluating several tools this quarter..." },
+    { name: "Unsubscribe Request", email: "noreply@marketing.co", subject: "Please remove me", result: "skipped", conf: 5, company: "", preview: "Please unsubscribe me from all communications..." },
+    { name: "Nina Patel", email: "nina@clearstride.com", subject: "Looking for outbound partner", result: "pending_review", conf: 63, company: "ClearStride", preview: "We're a 45-person SaaS company trying to build..." },
   ];
 
   await Promise.all(ingestionLogsData.map(({ name, email, subject, result, conf, company, preview }, i) =>
     sr.entities.EmailIngestionLog.create({
+      ...DEMO_TAG,
       workspace_id,
       gmail_message_id: `demo_msg_${i}_${workspace_id.slice(0, 8)}`,
       sender_name: name,
@@ -276,14 +276,15 @@ async function seedDemoData(base44, workspace_id, user) {
     })
   ));
 
-  // ── Email Ingestion Settings (so inbox monitor shows configured) ──
+  // ── Email Ingestion Settings ──────────────────────────────────
   const existingIngestion = await sr.entities.EmailIngestionSettings.filter({ workspace_id }, '-created_date', 1);
   if (!existingIngestion.length) {
     await sr.entities.EmailIngestionSettings.create({
+      ...DEMO_TAG,
       workspace_id,
       leads_inbox: "leads@apexgrowthpartners.com",
       sync_time: "08:00",
-      keywords: `demo,saas,pipeline,outbound ${M}`,
+      keywords: "demo,saas,pipeline,outbound",
       confidence_threshold: 60,
       auto_create: true,
       lookback_window: "7",
@@ -296,6 +297,7 @@ async function seedDemoData(base44, workspace_id, user) {
   // ── Follow-up Reminders ───────────────────────────────────────
   await Promise.all([
     sr.entities.FollowUpReminder.create({
+      ...DEMO_TAG,
       workspace_id,
       lead_id: createdLeads[3].id,
       lead_name: createdLeads[3].name,
@@ -305,9 +307,9 @@ async function seedDemoData(base44, workspace_id, user) {
       reminder_type: "no_reply",
       days_since_contact: 5,
       user_email: user.email,
-      dismiss_reason: M,
     }),
     sr.entities.FollowUpReminder.create({
+      ...DEMO_TAG,
       workspace_id,
       lead_id: createdLeads[1].id,
       lead_name: createdLeads[1].name,
@@ -317,9 +319,9 @@ async function seedDemoData(base44, workspace_id, user) {
       reminder_type: "stale_interested",
       days_since_contact: 3,
       user_email: user.email,
-      dismiss_reason: M,
     }),
     sr.entities.FollowUpReminder.create({
+      ...DEMO_TAG,
       workspace_id,
       lead_id: createdLeads[5].id,
       lead_name: createdLeads[5].name,
@@ -329,12 +331,12 @@ async function seedDemoData(base44, workspace_id, user) {
       reminder_type: "no_contact",
       days_since_contact: 0,
       user_email: user.email,
-      dismiss_reason: M,
     }),
   ]);
 
   // ── ICP Profile ───────────────────────────────────────────────
   const icp = await sr.entities.IdealCustomerProfile.create({
+    ...DEMO_TAG,
     workspace_id,
     name: "[Demo] B2B SaaS Growth Companies",
     industries: JSON.stringify(["SaaS", "Technology", "Fintech"]),
@@ -350,6 +352,7 @@ async function seedDemoData(base44, workspace_id, user) {
 
   // ── Discovery Run ─────────────────────────────────────────────
   const run = await sr.entities.DiscoveryRun.create({
+    ...DEMO_TAG,
     workspace_id,
     icp_id: icp.id,
     icp_name: icp.name,
@@ -363,38 +366,22 @@ async function seedDemoData(base44, workspace_id, user) {
   // ── Prospects + Signals + Contacts ───────────────────────────
   const prospectsData = [
     {
-      company_name: "Nucleus HQ",
-      domain: "nucleushq.com",
-      website: "https://nucleushq.com",
-      industry: "SaaS",
-      employee_count: 87,
-      revenue_range: "$4M-$12M ARR",
-      location: "San Francisco, CA",
-      fit_score: 91,
-      timing_score: 88,
-      opportunity_score: 90,
-      ai_summary: `Nucleus HQ just closed a $6M Series A and is aggressively hiring SDRs. Their LinkedIn shows 4 open sales roles — classic buying signal for outbound tooling. ${M}`,
+      company_name: "Nucleus HQ", domain: "nucleushq.com", website: "https://nucleushq.com",
+      industry: "SaaS", employee_count: 87, revenue_range: "$4M-$12M ARR", location: "San Francisco, CA",
+      fit_score: 91, timing_score: 88, opportunity_score: 90,
+      ai_summary: "Nucleus HQ just closed a $6M Series A and is aggressively hiring SDRs. Their LinkedIn shows 4 open sales roles — classic buying signal for outbound tooling.",
       recommended_angle: "Congratulate on Series A and pitch pipeline acceleration during their hiring surge.",
       signals: [
         { type: "funding", title: "Closed $6M Series A", desc: "Led by Sequoia, announced 3 weeks ago.", strength: 92 },
         { type: "hiring", title: "4 Open SDR Roles", desc: "Actively hiring sales development reps on LinkedIn.", strength: 85 },
       ],
-      contacts: [
-        { name: "Alex Torres", title: "VP of Sales", email: "a.torres@nucleushq.com", seniority: 85, dm_likelihood: 88 },
-      ],
+      contacts: [{ name: "Alex Torres", title: "VP of Sales", email: "a.torres@nucleushq.com", seniority: 85, dm_likelihood: 88 }],
     },
     {
-      company_name: "Streamline Ops",
-      domain: "streamlineops.io",
-      website: "https://streamlineops.io",
-      industry: "SaaS",
-      employee_count: 142,
-      revenue_range: "$8M-$25M ARR",
-      location: "Austin, TX",
-      fit_score: 85,
-      timing_score: 81,
-      opportunity_score: 83,
-      ai_summary: `Streamline Ops recently replaced their CRO and is rebuilding their go-to-market strategy. New leadership = new budget authority = high openness to switching tools. ${M}`,
+      company_name: "Streamline Ops", domain: "streamlineops.io", website: "https://streamlineops.io",
+      industry: "SaaS", employee_count: 142, revenue_range: "$8M-$25M ARR", location: "Austin, TX",
+      fit_score: 85, timing_score: 81, opportunity_score: 83,
+      ai_summary: "Streamline Ops recently replaced their CRO and is rebuilding their go-to-market strategy. New leadership = new budget authority = high openness to switching tools.",
       recommended_angle: "Lead with the leadership change angle — new CRO often re-evaluates existing vendors.",
       signals: [
         { type: "leadership_change", title: "New Chief Revenue Officer", desc: "Jake Morrison joined as CRO from Salesforce 6 weeks ago.", strength: 88 },
@@ -406,72 +393,46 @@ async function seedDemoData(base44, workspace_id, user) {
       ],
     },
     {
-      company_name: "Ironclad Labs",
-      domain: "ironcladlabs.co",
-      website: "https://ironcladlabs.co",
-      industry: "Fintech",
-      employee_count: 55,
-      revenue_range: "$2M-$7M ARR",
-      location: "New York, NY",
-      fit_score: 79,
-      timing_score: 85,
-      opportunity_score: 82,
-      ai_summary: `Ironclad Labs is in rapid growth mode post-product-market fit. Their pricing page has been visited by our tracked signal sources — showing intent to invest in their stack. ${M}`,
+      company_name: "Ironclad Labs", domain: "ironcladlabs.co", website: "https://ironcladlabs.co",
+      industry: "Fintech", employee_count: 55, revenue_range: "$2M-$7M ARR", location: "New York, NY",
+      fit_score: 79, timing_score: 85, opportunity_score: 82,
+      ai_summary: "Ironclad Labs is in rapid growth mode post-product-market fit. Their pricing page has been visited by our tracked signal sources — showing intent to invest in their stack.",
       recommended_angle: "Reference their pricing activity and pitch your ROI story with a similar-sized fintech.",
       signals: [
         { type: "pricing_page", title: "High Pricing Intent Signal", desc: "Multiple decision-makers visited pricing tier comparison.", strength: 82 },
         { type: "hiring", title: "Hiring VP of Marketing", desc: "Posted VP Marketing role — scaling go-to-market.", strength: 78 },
       ],
-      contacts: [
-        { name: "Mia Strauss", title: "CEO", email: "mia@ironcladlabs.co", seniority: 95, dm_likelihood: 91 },
-      ],
+      contacts: [{ name: "Mia Strauss", title: "CEO", email: "mia@ironcladlabs.co", seniority: 95, dm_likelihood: 91 }],
     },
     {
-      company_name: "Velo Commerce",
-      domain: "velocommerce.com",
-      website: "https://velocommerce.com",
-      industry: "SaaS",
-      employee_count: 210,
-      revenue_range: "$15M-$40M ARR",
-      location: "London, UK",
-      fit_score: 82,
-      timing_score: 72,
-      opportunity_score: 77,
-      ai_summary: `Velo Commerce is expanding into US markets and their public roadmap mentions building an outbound sales function from scratch. Perfect timing. ${M}`,
+      company_name: "Velo Commerce", domain: "velocommerce.com", website: "https://velocommerce.com",
+      industry: "SaaS", employee_count: 210, revenue_range: "$15M-$40M ARR", location: "London, UK",
+      fit_score: 82, timing_score: 72, opportunity_score: 77,
+      ai_summary: "Velo Commerce is expanding into US markets and their public roadmap mentions building an outbound sales function from scratch. Perfect timing.",
       recommended_angle: "Pitch as the infrastructure for their US outbound motion — offer a US-focused agency partnership.",
       signals: [
         { type: "news", title: "US Market Expansion Announced", desc: "Blog post: 'Velo Commerce is coming to North America'.", strength: 80 },
         { type: "hiring", title: "Hiring US-Based AEs", desc: "3 US-based Account Executive roles posted this month.", strength: 76 },
       ],
-      contacts: [
-        { name: "Oliver Grant", title: "VP Global Sales", email: "o.grant@velocommerce.com", seniority: 88, dm_likelihood: 85 },
-      ],
+      contacts: [{ name: "Oliver Grant", title: "VP Global Sales", email: "o.grant@velocommerce.com", seniority: 88, dm_likelihood: 85 }],
     },
     {
-      company_name: "Clearpath AI",
-      domain: "clearpath.ai",
-      website: "https://clearpath.ai",
-      industry: "Technology",
-      employee_count: 38,
-      revenue_range: "$1M-$4M ARR",
-      location: "Toronto, Canada",
-      fit_score: 74,
-      timing_score: 79,
-      opportunity_score: 77,
-      ai_summary: `Clearpath AI is a fast-growing AI startup that recently shipped a new product and is pushing to build a sales pipeline. Lean team, founder-led sales — ideal BeaconIQ candidate. ${M}`,
+      company_name: "Clearpath AI", domain: "clearpath.ai", website: "https://clearpath.ai",
+      industry: "Technology", employee_count: 38, revenue_range: "$1M-$4M ARR", location: "Toronto, Canada",
+      fit_score: 74, timing_score: 79, opportunity_score: 77,
+      ai_summary: "Clearpath AI is a fast-growing AI startup that recently shipped a new product and is pushing to build a sales pipeline. Lean team, founder-led sales — ideal BeaconIQ candidate.",
       recommended_angle: "Founder-led sales angle: BeaconIQ will save the CEO 10 hours per week on outbound.",
       signals: [
         { type: "product_launch", title: "Launched ClearPath 2.0", desc: "Major product update with enterprise features.", strength: 79 },
         { type: "tech_stack", title: "Adopted HubSpot CRM", desc: "Job listings reference HubSpot — they're building a sales stack.", strength: 71 },
       ],
-      contacts: [
-        { name: "Sandeep Malhotra", title: "Co-Founder & CEO", email: "sand@clearpath.ai", seniority: 92, dm_likelihood: 90 },
-      ],
+      contacts: [{ name: "Sandeep Malhotra", title: "Co-Founder & CEO", email: "sand@clearpath.ai", seniority: 92, dm_likelihood: 90 }],
     },
   ];
 
   for (const pd of prospectsData) {
     const prospect = await sr.entities.Prospect.create({
+      ...DEMO_TAG,
       workspace_id,
       company_name: pd.company_name,
       domain: pd.domain,
@@ -494,6 +455,7 @@ async function seedDemoData(base44, workspace_id, user) {
     await Promise.all([
       ...pd.signals.map((s, i) =>
         sr.entities.ProspectSignal.create({
+          ...DEMO_TAG,
           workspace_id,
           prospect_id: prospect.id,
           signal_type: s.type,
@@ -505,6 +467,7 @@ async function seedDemoData(base44, workspace_id, user) {
       ),
       ...pd.contacts.map(c =>
         sr.entities.ProspectContact.create({
+          ...DEMO_TAG,
           workspace_id,
           prospect_id: prospect.id,
           name: c.name,

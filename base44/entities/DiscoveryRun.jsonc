@@ -42,6 +42,15 @@
     "notes": {
       "type": "string",
       "title": "Notes"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Is Demo Record",
+      "default": false
+    },
+    "demo_batch": {
+      "type": "string",
+      "title": "Demo Batch"
     }
   },
   "required": [

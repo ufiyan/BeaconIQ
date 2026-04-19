@@ -46,6 +46,15 @@
       "type": "boolean",
       "title": "Active Profile",
       "default": true
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Is Demo Record",
+      "default": false
+    },
+    "demo_batch": {
+      "type": "string",
+      "title": "Demo Batch"
     }
   },
   "required": [

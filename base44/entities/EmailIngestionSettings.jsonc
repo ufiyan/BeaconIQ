@@ -68,6 +68,15 @@
       "type": "boolean",
       "title": "Gmail Connected",
       "default": false
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Is Demo Record",
+      "default": false
+    },
+    "demo_batch": {
+      "type": "string",
+      "title": "Demo Batch"
     }
   },
   "required": [],

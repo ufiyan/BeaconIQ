@@ -80,6 +80,15 @@
     "discovery_run_id": {
       "type": "string",
       "title": "Discovery Run ID"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "title": "Is Demo Record",
+      "default": false
+    },
+    "demo_batch": {
+      "type": "string",
+      "title": "Demo Batch"
     }
   },
   "required": [
