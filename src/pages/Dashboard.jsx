@@ -9,17 +9,18 @@ import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { SkeletonDashboard } from "../components/SkeletonTable";
 import GettingStartedBanner from "../components/GettingStartedBanner";
+import DashboardHero from "../components/DashboardHero";
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
 const PIPELINE_STAGES = ["New", "Contacted", "Replied", "Interested", "Meeting Booked", "Closed"];
 const STAGE_COLORS = {
-  "New": "#3B82F6",
-  "Contacted": "#818CF8",
-  "Replied": "#2DD4BF",
-  "Interested": "#F59E0B",
-  "Meeting Booked": "#10B981",
-  "Closed": "#EF4444",
+  "New": "#00E5FF",
+  "Contacted": "#7C4DFF",
+  "Replied": "#00F5A5",
+  "Interested": "#FFB020",
+  "Meeting Booked": "#FF2D92",
+  "Closed": "#FF4D6D",
 };
 
 function initials(name) {
@@ -93,28 +94,12 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="font-semibold text-white" style={{ fontSize: "20px" }}>Dashboard</h1>
-          <p className="text-xs mt-0.5" style={{ color: "#64748B" }}>Your outbound intelligence command center</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isEmpty && (
-            <Link
-              to="/settings?tab=demo"
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-              style={{ background: "rgba(139,92,246,0.15)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.3)" }}
-            >
-              <FlaskConical className="h-3.5 w-3.5" /> Load Demo Data
-            </Link>
-          )}
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: "#10B981" }} />
-            <span className="text-xs" style={{ color: "#94A3B8" }}>Live · {moment().format("h:mm A")}</span>
-          </div>
-        </div>
-      </div>
+      <DashboardHero
+        userName={workspace?.name}
+        isEmpty={isEmpty}
+        totalLeads={totalLeads}
+        totalSent={totalSent}
+      />
 
       {!(workspace?.gmail_connected && ingestionSettings?.leads_inbox && leads.length > 0) && (
         <GettingStartedBanner workspace={workspace} ingestionSettings={ingestionSettings} />
@@ -122,23 +107,23 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accentColor="#3B82F6" />
-        <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accentColor="#2DD4BF" />
-        <StatsCard icon={MessageSquare} label="Reply Rate" value={contacted > 0 ? `${Math.round((replied / contacted) * 100)}%` : "0%"} accentColor="#F59E0B" />
-        <StatsCard icon={Calendar} label="Meetings Booked" value={meetings} accentColor="#10B981" />
+        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accentColor="#00E5FF" />
+        <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accentColor="#7C4DFF" />
+        <StatsCard icon={MessageSquare} label="Reply Rate" value={contacted > 0 ? `${Math.round((replied / contacted) * 100)}%` : "0%"} accentColor="#FFB020" />
+        <StatsCard icon={Calendar} label="Meetings Booked" value={meetings} accentColor="#FF2D92" />
       </div>
 
       {/* Discovery + Pipeline row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Pipeline */}
         <div className="lg:col-span-2 rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <p className="text-xs font-medium text-white mb-4">Inbound Pipeline</p>
+          <p className="text-xs font-medium text-white font-mono tracking-wider uppercase mb-4">Inbound Pipeline</p>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {PIPELINE_STAGES.map(stage => (
-              <div key={stage} className="flex flex-col items-center rounded-lg p-3" style={{ background: "hsl(var(--secondary))" }}>
-                <span className="text-xl font-semibold text-white">{stageCounts[stage]}</span>
-                <span className="text-xs mt-1 text-center leading-tight" style={{ color: "#94A3B8" }}>{stage}</span>
-                <div className="mt-2 h-1 w-full rounded-full" style={{ background: STAGE_COLORS[stage], opacity: 0.7 }} />
+              <div key={stage} className="flex flex-col items-center rounded-xl p-3 relative overflow-hidden" style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${STAGE_COLORS[stage]}20` }}>
+                <span className="font-display text-2xl font-bold text-white">{stageCounts[stage]}</span>
+                <span className="text-[10px] mt-1 text-center leading-tight font-mono uppercase tracking-wider" style={{ color: "#94A3B8" }}>{stage}</span>
+                <div className="mt-2 h-0.5 w-full rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${STAGE_COLORS[stage]}, transparent)`, boxShadow: `0 0 8px ${STAGE_COLORS[stage]}80` }} />
               </div>
             ))}
           </div>
@@ -148,10 +133,10 @@ export default function Dashboard() {
         <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Telescope className="h-4 w-4" style={{ color: "#3B82F6" }} />
-              <p className="text-xs font-medium text-white">Prospect Discovery</p>
+              <Telescope className="h-4 w-4" style={{ color: "#00E5FF" }} />
+              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Prospect Discovery</p>
             </div>
-            <Link to="/prospect-discovery" className="text-xs" style={{ color: "#3B82F6" }}>View all →</Link>
+            <Link to="/prospect-discovery" className="text-xs" style={{ color: "#00E5FF" }}>View all →</Link>
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
@@ -159,7 +144,7 @@ export default function Dashboard() {
               <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Active</p>
             </div>
             <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-              <p className="text-2xl font-bold" style={{ color: "#10B981" }}>{prospects.filter(p => p.status === "Converted").length}</p>
+              <p className="text-2xl font-bold" style={{ color: "#00F5A5" }}>{prospects.filter(p => p.status === "Converted").length}</p>
               <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Converted</p>
             </div>
           </div>
@@ -169,12 +154,12 @@ export default function Dashboard() {
                 <p className="text-xs font-medium text-white truncate group-hover:text-blue-400 transition-colors">{p.company_name}</p>
                 <p className="text-xs truncate" style={{ color: "#64748B" }}>{p.industry}</p>
               </div>
-              <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: p.opportunity_score >= 75 ? "#10B981" : "#F59E0B" }}>{p.opportunity_score}</span>
+              <span className="text-xs font-bold ml-2 flex-shrink-0 font-mono" style={{ color: p.opportunity_score >= 75 ? "#00F5A5" : "#FFB020" }}>{p.opportunity_score}</span>
             </Link>
           )) : (
             <div className="text-center py-3">
               <p className="text-xs" style={{ color: "#64748B" }}>No prospects yet</p>
-              <Link to="/prospect-discovery" className="text-xs" style={{ color: "#3B82F6" }}>Run discovery →</Link>
+              <Link to="/prospect-discovery" className="text-xs" style={{ color: "#00E5FF" }}>Run discovery →</Link>
             </div>
           )}
         </div>
@@ -184,10 +169,10 @@ export default function Dashboard() {
       {highIntentLeads.length > 0 && (
         <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: "#F59E0B" }} />
-            <p className="text-xs font-medium text-white">High Intent Leads</p>
+            <span className="h-2 w-2 rounded-full animate-pulse-glow" style={{ background: "#FFB020", boxShadow: "0 0 8px #FFB020" }} />
+            <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">High Intent Leads</p>
             <span className="text-xs ml-1" style={{ color: "#64748B" }}>— scored by AI from behavioral + email signals</span>
-            <span className="text-xs ml-auto" style={{ color: "#94A3B8" }}>Top {highIntentLeads.length} by IQ Score</span>
+            <span className="text-xs ml-auto font-mono" style={{ color: "#94A3B8" }}>Top {highIntentLeads.length} by IQ Score</span>
           </div>
           {highIntentLeads.map(lead => (
             <div key={lead.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
@@ -198,7 +183,7 @@ export default function Dashboard() {
                   <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
                 </div>
               </div>
-              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1 rounded-lg transition-colors flex-shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
+              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1.5 rounded-lg transition-all flex-shrink-0 font-medium" style={{ background: "linear-gradient(135deg, rgba(255,176,32,0.18), rgba(255,45,146,0.12))", color: "#FFB020", border: "1px solid rgba(255,176,32,0.3)", textDecoration: "none" }}>
                 Generate Email →
               </Link>
             </div>
@@ -243,8 +228,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
           <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <p className="text-xs font-medium text-white">Recent Leads</p>
-            <Link to="/leads" className="flex items-center gap-1 text-xs" style={{ color: "#3B82F6" }}>
+            <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Recent Leads</p>
+            <Link to="/leads" className="flex items-center gap-1 text-xs" style={{ color: "#00E5FF" }}>
               View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
@@ -259,7 +244,7 @@ export default function Dashboard() {
                   onMouseEnter={e => e.currentTarget.style.background = "hsl(var(--secondary))"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-mono font-bold" style={{ background: "linear-gradient(135deg, rgba(0,229,255,0.2), rgba(255,45,146,0.1))", color: "#00E5FF", border: "1px solid rgba(0,229,255,0.25)" }}>
                       {initials(lead.name)}
                     </div>
                     <div className="min-w-0">
@@ -281,7 +266,7 @@ export default function Dashboard() {
           {/* Gmail Sync widget */}
           <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-white">Lead Capture — Gmail</p>
+              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Gmail Capture</p>
               <button
                 onClick={async () => {
                   if (!ingestionSettings?.leads_inbox) return;
@@ -307,7 +292,7 @@ export default function Dashboard() {
                 }}
                 disabled={syncing || !ingestionSettings?.leads_inbox}
                 className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}
+                style={{ background: "rgba(0,229,255,0.12)", color: "#00E5FF", border: "1px solid rgba(0,229,255,0.25)" }}
               >
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 Sync now
@@ -326,7 +311,7 @@ export default function Dashboard() {
             ) : (
               <div className="mb-3">
                 <p className="text-xs" style={{ color: "#94A3B8" }}>Not configured</p>
-                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#3B82F6" }}>Set up Inbox Monitor →</Link>
+                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#00E5FF" }}>Set up Inbox Monitor →</Link>
               </div>
             )}
             {ingestionLogs.length > 0 && (
@@ -351,8 +336,8 @@ export default function Dashboard() {
           {/* Campaigns widget */}
           <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-              <p className="text-xs font-medium text-white">Active Campaigns</p>
-              <Link to="/campaigns" className="text-xs" style={{ color: "#3B82F6" }}>View all</Link>
+              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Active Campaigns</p>
+              <Link to="/campaigns" className="text-xs" style={{ color: "#00E5FF" }}>View all</Link>
             </div>
             {campaigns.length === 0 ? (
               <EmptyState icon={Zap} title="No campaigns" description="Create your first campaign">
