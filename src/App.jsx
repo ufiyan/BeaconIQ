@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { WorkspaceProvider } from '@/lib/WorkspaceContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
@@ -21,7 +22,7 @@ import OAuthCallback from './pages/OAuthCallback';
 import Templates from './pages/Templates';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -43,7 +44,18 @@ const AuthenticatedApp = () => {
     }
   }
 
-  // Render the main app
+  // Public marketing site for unauthenticated visitors.
+  // Any deep-link into the app triggers the login flow via navigateToLogin().
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="*" element={<RequireAuthRedirect />} />
+      </Routes>
+    );
+  }
+
+  // Render the main app for authenticated users
   return (
     <Routes>
       <Route path="/onboarding" element={<Onboarding />} />
@@ -61,6 +73,14 @@ const AuthenticatedApp = () => {
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
+};
+
+// For unauthenticated users hitting any in-app route directly — bounce to login,
+// then return them to that same route after auth.
+const RequireAuthRedirect = () => {
+  const { navigateToLogin } = useAuth();
+  navigateToLogin();
+  return null;
 };
 
 
