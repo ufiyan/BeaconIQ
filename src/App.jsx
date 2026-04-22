@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -21,8 +21,13 @@ import ReviewQueue from './pages/ReviewQueue';
 import OAuthCallback from './pages/OAuthCallback';
 import Templates from './pages/Templates';
 
+// Routes that MUST stay public — no auth prompt on visit.
+const PUBLIC_PATHS = ["/"];
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
+  const location = useLocation();
+  const isPublicPath = PUBLIC_PATHS.includes(location.pathname);
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -36,9 +41,26 @@ const AuthenticatedApp = () => {
   // Handle authentication errors
   if (authError) {
     if (authError.type === 'user_not_registered') {
+      // Never block the public homepage — user_not_registered still lands on marketing.
+      if (isPublicPath) {
+        return (
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="*" element={<Landing />} />
+          </Routes>
+        );
+      }
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
+      // Public homepage must render without auth. Only redirect for protected routes.
+      if (isPublicPath) {
+        return (
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="*" element={<Landing />} />
+          </Routes>
+        );
+      }
       navigateToLogin();
       return null;
     }
