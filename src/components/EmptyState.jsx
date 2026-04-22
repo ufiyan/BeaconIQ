@@ -1,14 +1,14 @@
-export default function EmptyState({ icon: Icon, title, description, children }) {
+export default function EmptyState({ icon: Icon, title, description, children, compact }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+    <div className={`flex flex-col items-center justify-center text-center ${compact ? "py-10 px-4" : "py-16 px-4"}`}>
       {Icon && (
-        <div className="h-14 w-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(59,130,246,0.1)" }}>
-          <Icon className="h-7 w-7" style={{ color: "#3B82F6" }} />
+        <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4 bg-secondary border border-border">
+          <Icon className="h-5 w-5 text-muted-foreground" />
         </div>
       )}
-      <h3 className="text-sm font-medium text-white">{title}</h3>
-      {description && <p className="text-xs mt-1 max-w-sm" style={{ color: "#94A3B8" }}>{description}</p>}
-      {children && <div className="mt-5">{children}</div>}
+      <h3 className="text-[14px] font-semibold text-white">{title}</h3>
+      {description && <p className="text-[12px] mt-1.5 max-w-sm text-muted-foreground leading-relaxed">{description}</p>}
+      {children && <div className="mt-4 flex items-center gap-2 flex-wrap justify-center">{children}</div>}
     </div>
   );
 }
