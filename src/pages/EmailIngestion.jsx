@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2, Mail, Settings, Inbox, CheckCircle2, XCircle } from "lucide-react";
 import PageHeader from "../components/PageHeader";
@@ -18,44 +19,57 @@ const RESULT_STYLES = {
 };
 
 export default function EmailIngestion() {
+  const { workspace, isLoading: wsLoading } = useWorkspace();
   const [logs, setLogs] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { if (!wsLoading) loadData(); }, [workspace, wsLoading]);
 
   const loadData = async () => {
+    if (!workspace?.id) { setLoading(false); return; }
     setLoading(true);
-    const user = await base44.auth.me();
-    const uf = { created_by: user.email };
-    const [logData, settingsList] = await Promise.all([
-      base44.entities.EmailIngestionLog.filter(uf, "-created_date", 100),
-      base44.entities.EmailIngestionSettings.filter(uf, "-created_date", 1).catch(() => []),
-    ]);
-    setLogs(logData);
-    setSettings(settingsList[0] || null);
-    setLoading(false);
+    try {
+      const wf = { workspace_id: workspace.id };
+      const [logData, settingsList] = await Promise.all([
+        base44.entities.EmailIngestionLog.filter(wf, "-created_date", 100),
+        base44.entities.EmailIngestionSettings.filter(wf, "-created_date", 1).catch(() => []),
+      ]);
+      setLogs(logData);
+      setSettings(settingsList[0] || null);
+    } catch (err) {
+      toast({ title: "Could not load inbox activity", description: err?.message || "Please refresh.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const syncNow = async () => {
+    if (syncing) return;
     if (!settings?.leads_inbox) {
       toast({ title: "Configure your leads inbox in Settings first", variant: "destructive" });
       return;
     }
     setSyncing(true);
-    const res = await base44.functions.invoke('gmailSync', {}).catch(e => ({ data: { error: e.message } }));
-    if (res?.data?.error) {
-      toast({ title: "Sync failed", description: res.data.error, variant: "destructive" });
-    } else {
-      const s = res?.data?.stats;
-      toast({ title: "Sync complete", description: `${s?.scanned || 0} scanned · ${s?.created || 0} created · ${s?.reviewed || 0} in review · ${s?.skipped || 0} skipped` });
+    try {
+      const res = await base44.functions.invoke('gmailSync', {});
+      const err = res?.data?.error;
+      if (err) {
+        toast({ title: "Sync failed", description: err, variant: "destructive" });
+      } else {
+        const s = res?.data?.stats;
+        toast({ title: "Sync complete", description: `${s?.scanned || 0} scanned · ${s?.created || 0} created · ${s?.reviewed || 0} in review · ${s?.skipped || 0} skipped` });
+      }
+    } catch (err) {
+      toast({ title: "Sync failed", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+      loadData();
     }
-    setSyncing(false);
-    loadData();
   };
 
-  if (loading) {
+  if (wsLoading || loading) {
     return (
       <div className="p-6 lg:p-8 max-w-5xl mx-auto">
         <PageHeader title="Inbox Activity" description="Loading…" />

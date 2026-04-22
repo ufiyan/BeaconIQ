@@ -51,8 +51,8 @@ export default function Leads() {
     try {
       const [data, scores, reminders] = await Promise.all([
         base44.entities.Lead.filter(wf, "-created_date", 200),
-        base44.entities.IntentScore.filter(wf, "-scored_at", 500),
-        base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-created_date", 500).catch(() => []),
+        base44.entities.IntentScore.filter(wf, "-scored_at", 500).catch(() => []),
+        base44.entities.FollowUpReminder.filter({ ...wf, status: "pending" }, "-created_date", 500).catch(() => []),
       ]);
       setLeads(data);
       const scoreMap = {};
@@ -60,7 +60,7 @@ export default function Leads() {
       setIntentScores(scoreMap);
       setReminderLeadIds(new Set(reminders.map(r => r.lead_id)));
     } catch (err) {
-      toast({ title: "Failed to load leads", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to load leads", description: err?.message || "Please refresh.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -70,7 +70,32 @@ export default function Leads() {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
   };
 
-  useEffect(() => { if (!workspaceLoading) loadLeads(); }, [workspace, workspaceLoading]);
+  useEffect(() => {
+    if (workspaceLoading) return;
+    let cancelled = false;
+    (async () => {
+      if (!workspace) return;
+      const wf = { workspace_id: workspace.id };
+      try {
+        const [data, scores, reminders] = await Promise.all([
+          base44.entities.Lead.filter(wf, "-created_date", 200),
+          base44.entities.IntentScore.filter(wf, "-scored_at", 500).catch(() => []),
+          base44.entities.FollowUpReminder.filter({ ...wf, status: "pending" }, "-created_date", 500).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setLeads(data);
+        const scoreMap = {};
+        for (const s of scores) { scoreMap[s.lead_id] = s.intent_score; }
+        setIntentScores(scoreMap);
+        setReminderLeadIds(new Set(reminders.map(r => r.lead_id)));
+      } catch (err) {
+        if (!cancelled) toast({ title: "Failed to load leads", description: err?.message || "Please refresh.", variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspace, workspaceLoading, toast]);
 
   const filtered = leads.filter(l => {
     const matchSearch = !search ||

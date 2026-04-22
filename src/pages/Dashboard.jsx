@@ -45,30 +45,37 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (workspaceLoading || !workspace) return;
+    let cancelled = false;
     (async () => {
-      const user = await base44.auth.me();
       const wf = { workspace_id: workspace.id };
-      const [l, c, e, s, isl, ill, rem, rev] = await Promise.all([
-        base44.entities.Lead.filter(wf, "-created_date", 100),
-        base44.entities.Campaign.filter(wf, "-created_date", 10),
-        base44.entities.EmailLog.filter(wf, "-created_date", 20),
-        base44.entities.IntentScore.filter({ created_by: user.email }, "-intent_score", 50),
-        base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, "-created_date", 1).catch(() => []),
-        base44.entities.EmailIngestionLog.filter(wf, "-created_date", 10).catch(() => []),
-        base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-due_date", 20).catch(() => []),
-        base44.entities.EmailIngestionLog.filter({ created_by: user.email, result: "pending_review" }, "-created_date", 200).catch(() => []),
-      ]);
-      setLeads(l);
-      setCampaigns(c);
-      setEmails(e);
-      setIntentScores(s);
-      setIngestionSettings(isl[0] || null);
-      setIngestionLogs(ill);
-      setReminders(rem);
-      setReviewCount(rev.length);
-      setLoading(false);
+      try {
+        const [l, c, e, s, isl, ill, rem, rev] = await Promise.all([
+          base44.entities.Lead.filter(wf, "-created_date", 100),
+          base44.entities.Campaign.filter(wf, "-created_date", 10),
+          base44.entities.EmailLog.filter(wf, "-created_date", 20),
+          base44.entities.IntentScore.filter(wf, "-intent_score", 50).catch(() => []),
+          base44.entities.EmailIngestionSettings.filter(wf, "-created_date", 1).catch(() => []),
+          base44.entities.EmailIngestionLog.filter(wf, "-created_date", 10).catch(() => []),
+          base44.entities.FollowUpReminder.filter({ ...wf, status: "pending" }, "-due_date", 20).catch(() => []),
+          base44.entities.EmailIngestionLog.filter({ ...wf, result: "pending_review" }, "-created_date", 200).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setLeads(l);
+        setCampaigns(c);
+        setEmails(e);
+        setIntentScores(s);
+        setIngestionSettings(isl[0] || null);
+        setIngestionLogs(ill);
+        setReminders(rem);
+        setReviewCount(rev.length);
+      } catch (err) {
+        if (!cancelled) toast({ title: "Could not load dashboard", description: err?.message || "Please refresh.", variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-  }, [workspace, workspaceLoading]);
+    return () => { cancelled = true; };
+  }, [workspace, workspaceLoading, toast]);
 
   if (workspaceLoading || loading) return <SkeletonDashboard />;
 
@@ -98,17 +105,17 @@ export default function Dashboard() {
     if (!ingestionSettings?.leads_inbox || syncing) return;
     setSyncing(true);
     try {
-      const user = await base44.auth.me();
-      const uf = { created_by: user.email };
       const res = await base44.functions.invoke('gmailSync', {});
       const stats = res?.data?.stats;
+      // Targeted refresh — only ingestion-related state
+      const wf = { workspace_id: workspace.id };
       const [isl, ill] = await Promise.all([
-        base44.entities.EmailIngestionSettings.filter(uf, '-created_date', 1).catch(() => []),
-        base44.entities.EmailIngestionLog.filter(uf, '-created_date', 10).catch(() => []),
+        base44.entities.EmailIngestionSettings.filter(wf, '-created_date', 1).catch(() => []),
+        base44.entities.EmailIngestionLog.filter(wf, '-created_date', 10).catch(() => []),
       ]);
       setIngestionSettings(isl[0] || null);
       setIngestionLogs(ill);
-      toast({ title: "Sync complete", description: stats ? `${stats.created || 0} new leads, ${stats.skipped || 0} skipped` : "Sync finished" });
+      toast({ title: "Sync complete", description: stats ? `${stats.created || 0} new leads · ${stats.skipped || 0} skipped` : "Sync finished" });
     } catch (err) {
       toast({ title: "Sync failed", description: err?.message || "Please try again in a moment.", variant: "destructive" });
     } finally {

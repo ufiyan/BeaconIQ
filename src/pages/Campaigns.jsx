@@ -31,18 +31,47 @@ export default function Campaigns() {
 
   useEffect(() => { if (!wsLoading) loadCampaigns(); }, [workspace, wsLoading]);
 
+  const [busyIds, setBusyIds] = useState(() => new Set());
+  const setBusy = (id, on) => setBusyIds(prev => {
+    const next = new Set(prev);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
+
   const toggleStatus = async (campaign) => {
+    if (busyIds.has(campaign.id)) return;
     const newStatus = campaign.status === "Active" ? "Paused" : "Active";
-    await base44.entities.Campaign.update(campaign.id, { status: newStatus });
-    toast({ title: `Campaign ${newStatus === "Active" ? "activated" : "paused"}` });
-    loadCampaigns();
+    setBusy(campaign.id, true);
+    // Optimistic update
+    setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, status: newStatus } : c));
+    try {
+      await base44.entities.Campaign.update(campaign.id, { status: newStatus });
+      toast({ title: `Campaign ${newStatus === "Active" ? "activated" : "paused"}` });
+    } catch (err) {
+      // Rollback
+      setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, status: campaign.status } : c));
+      toast({ title: "Could not update campaign", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBusy(campaign.id, false);
+    }
   };
 
   const deleteCampaign = async (id) => {
+    if (busyIds.has(id)) return;
     if (!confirm("Delete this campaign?")) return;
-    await base44.entities.Campaign.delete(id);
-    toast({ title: "Campaign deleted" });
-    loadCampaigns();
+    const snapshot = campaigns;
+    setBusy(id, true);
+    // Optimistic removal
+    setCampaigns(prev => prev.filter(c => c.id !== id));
+    try {
+      await base44.entities.Campaign.delete(id);
+      toast({ title: "Campaign deleted" });
+    } catch (err) {
+      setCampaigns(snapshot);
+      toast({ title: "Could not delete campaign", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBusy(id, false);
+    }
   };
 
   if (wsLoading || loading) {
@@ -100,15 +129,17 @@ export default function Campaigns() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => toggleStatus(campaign)}
+                      disabled={busyIds.has(campaign.id)}
                       title={campaign.status === "Active" ? "Pause" : "Activate"}
-                      className="h-8 w-8 rounded-md flex items-center justify-center transition-colors bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-white"
+                      className="h-8 w-8 rounded-md flex items-center justify-center transition-colors bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-white disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {campaign.status === "Active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       onClick={() => deleteCampaign(campaign.id)}
+                      disabled={busyIds.has(campaign.id)}
                       title="Delete"
-                      className="h-8 w-8 rounded-md flex items-center justify-center transition-colors bg-secondary hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      className="h-8 w-8 rounded-md flex items-center justify-center transition-colors bg-secondary hover:bg-destructive/10 text-muted-foreground hover:text-destructive disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

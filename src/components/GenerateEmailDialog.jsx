@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import SendConfirmModal from "./SendConfirmModal";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,14 @@ function ContextChip({ icon: Icon, label, value, color = "primary" }) {
 }
 
 export default function GenerateEmailDialog({ open, onClose, lead, intentScore: initialIntentScore, onSuccess }) {
+  const { workspace } = useWorkspace();
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [generating, setGenerating] = useState(false);
   const [profile, setProfile] = useState(null);
   const [intentScore, setIntentScore] = useState(initialIntentScore || null);
   const [pendingEmail, setPendingEmail] = useState(null);
+  const [logging, setLogging] = useState(false);
 
   useEffect(() => { setIntentScore(initialIntentScore || null); }, [initialIntentScore]);
 
@@ -49,7 +52,9 @@ export default function GenerateEmailDialog({ open, onClose, lead, intentScore: 
   }, [open, lead?.id, initialIntentScore]);
 
   const generateEmail = async () => {
+    if (generating) return;
     setGenerating(true);
+    try {
     const context = profile
       ? `Business: ${profile.business_name}. Description: ${profile.description}. Target audience: ${profile.target_audience}. Tone: ${profile.tone}. Goal: ${profile.sales_goal}. Products/Services: ${profile.products_services || 'N/A'}.`
       : "A professional business reaching out to potential clients.";
@@ -91,7 +96,11 @@ Output JSON with "subject" and "body" fields.`,
 
     setSubject(result.subject);
     setBody(result.body);
-    setGenerating(false);
+    } catch (err) {
+      toast({ title: "Could not generate email", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const sendEmail = () => {
@@ -102,26 +111,39 @@ Output JSON with "subject" and "body" fields.`,
   };
 
   const confirmSent = async () => {
-    if (!pendingEmail) return;
-    await base44.entities.EmailLog.create({
-      lead_id: lead.id,
-      lead_name: lead.name,
-      lead_email: lead.email,
-      subject: pendingEmail.subject,
-      body: pendingEmail.body,
-      status: "Sent",
-      sent_at: new Date().toISOString(),
-      ai_generated: true
-    });
-    await base44.entities.Lead.update(lead.id, {
-      status: lead.status === "New" ? "Contacted" : lead.status,
-      last_contacted: new Date().toISOString(),
-      total_emails_sent: (lead.total_emails_sent || 0) + 1
-    });
-    toast({ title: "Email logged as sent" });
-    setPendingEmail(null);
-    setSubject(""); setBody("");
-    onSuccess(); onClose();
+    // Idempotency guard: prevent duplicate EmailLog + double-increment on repeat clicks
+    if (!pendingEmail || logging) return;
+    setLogging(true);
+    try {
+      // Fetch fresh lead to avoid stale counter race condition
+      const fresh = await base44.entities.Lead.filter({ id: lead.id }, "-created_date", 1).catch(() => [lead]);
+      const current = fresh[0] || lead;
+      await base44.entities.EmailLog.create({
+        workspace_id: workspace?.id,
+        lead_id: lead.id,
+        lead_name: lead.name,
+        lead_email: lead.email,
+        subject: pendingEmail.subject,
+        body: pendingEmail.body,
+        status: "Sent",
+        sent_at: new Date().toISOString(),
+        ai_generated: true,
+      });
+      await base44.entities.Lead.update(lead.id, {
+        status: current.status === "New" ? "Contacted" : current.status,
+        last_contacted: new Date().toISOString(),
+        total_emails_sent: (current.total_emails_sent || 0) + 1,
+      });
+      toast({ title: "Email logged as sent" });
+      setPendingEmail(null);
+      setSubject(""); setBody("");
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      toast({ title: "Could not log email", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setLogging(false);
+    }
   };
 
   const cancelSent = () => {
@@ -137,6 +159,7 @@ Output JSON with "subject" and "body" fields.`,
   };
 
   const handleClose = () => {
+    if (generating || logging) return;
     setSubject("");
     setBody("");
     onClose();

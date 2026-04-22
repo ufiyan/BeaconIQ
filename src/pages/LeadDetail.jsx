@@ -20,35 +20,98 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [activeReminder, setActiveReminder] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [dismissingReminder, setDismissingReminder] = useState(false);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const [leads, allEmails, scores, reminders] = await Promise.all([
-      base44.entities.Lead.filter({ id, created_by: user.email }),
-      base44.entities.EmailLog.filter({ lead_id: id, created_by: user.email }, "-created_date", 50),
-      base44.entities.IntentScore.filter({ lead_id: id, created_by: user.email }, "-scored_at", 1),
-      base44.entities.FollowUpReminder.filter({ lead_id: id, created_by: user.email, status: "pending" }, "-created_date", 1).catch(() => []),
-    ]);
-    setLead(leads[0]);
-    setEmails(allEmails.filter(e => e.status !== "Cancelled"));
-    setIntentScore(scores[0] || null);
-    setActiveReminder(reminders[0] || null);
-    setLoading(false);
+    try {
+      const [leads, allEmails, scores, reminders] = await Promise.all([
+        base44.entities.Lead.filter({ id }),
+        base44.entities.EmailLog.filter({ lead_id: id }, "-created_date", 50),
+        base44.entities.IntentScore.filter({ lead_id: id }, "-scored_at", 1),
+        base44.entities.FollowUpReminder.filter({ lead_id: id, status: "pending" }, "-created_date", 1).catch(() => []),
+      ]);
+      setLead(leads[0] || null);
+      setEmails(allEmails.filter(e => e.status !== "Cancelled"));
+      setIntentScore(scores[0] || null);
+      setActiveReminder(reminders[0] || null);
+    } catch (err) {
+      toast({ title: "Could not load lead", description: err?.message || "Please refresh.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { loadData(); }, [id]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const [leads, allEmails, scores, reminders] = await Promise.all([
+          base44.entities.Lead.filter({ id }),
+          base44.entities.EmailLog.filter({ lead_id: id }, "-created_date", 50),
+          base44.entities.IntentScore.filter({ lead_id: id }, "-scored_at", 1),
+          base44.entities.FollowUpReminder.filter({ lead_id: id, status: "pending" }, "-created_date", 1).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setLead(leads[0] || null);
+        setEmails(allEmails.filter(e => e.status !== "Cancelled"));
+        setIntentScore(scores[0] || null);
+        setActiveReminder(reminders[0] || null);
+      } catch (err) {
+        if (!cancelled) toast({ title: "Could not load lead", description: err?.message || "Please refresh.", variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   const updateStatus = async (status) => {
-    await base44.entities.Lead.update(id, { status });
+    if (statusSaving || status === lead?.status) return;
+    const previous = lead?.status;
+    setStatusSaving(true);
+    // Optimistic
     setLead(prev => ({ ...prev, status }));
-    toast({ title: `Status updated to ${status}` });
+    try {
+      await base44.entities.Lead.update(id, { status });
+      toast({ title: `Status updated to ${status}` });
+    } catch (err) {
+      setLead(prev => ({ ...prev, status: previous }));
+      toast({ title: "Could not update status", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setStatusSaving(false);
+    }
   };
 
   const deleteLead = async () => {
+    if (deleting) return;
     if (!confirm("Delete this lead?")) return;
-    await base44.entities.Lead.delete(id);
-    toast({ title: "Lead deleted" });
-    navigate("/leads");
+    setDeleting(true);
+    try {
+      await base44.entities.Lead.delete(id);
+      toast({ title: "Lead deleted" });
+      navigate("/leads");
+    } catch (err) {
+      toast({ title: "Could not delete lead", description: err?.message || "Please try again.", variant: "destructive" });
+      setDeleting(false);
+    }
+  };
+
+  const dismissReminder = async () => {
+    if (!activeReminder || dismissingReminder) return;
+    const snapshot = activeReminder;
+    setDismissingReminder(true);
+    setActiveReminder(null); // optimistic
+    try {
+      await base44.entities.FollowUpReminder.update(snapshot.id, { status: "dismissed", dismiss_reason: "manually dismissed" });
+    } catch (err) {
+      setActiveReminder(snapshot);
+      toast({ title: "Could not dismiss reminder", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setDismissingReminder(false);
+    }
   };
 
   if (loading) {
@@ -97,10 +160,8 @@ export default function LeadDetail() {
               </Button>
               <Button
                 variant="outline"
-                onClick={async () => {
-                  await base44.entities.FollowUpReminder.update(activeReminder.id, { status: "dismissed", dismiss_reason: "manually dismissed" });
-                  setActiveReminder(null);
-                }}
+                onClick={dismissReminder}
+                disabled={dismissingReminder}
                 className="h-8 text-[12px]"
               >Dismiss</Button>
             </div>
@@ -142,7 +203,7 @@ export default function LeadDetail() {
             >
               <Sparkles className="h-4 w-4" /> Generate Email
             </Button>
-            <Button variant="ghost" size="icon" onClick={deleteLead} className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10">
+            <Button variant="ghost" size="icon" onClick={deleteLead} disabled={deleting} className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -150,7 +211,7 @@ export default function LeadDetail() {
 
         <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 border-t border-border">
           <MetaField label="Status">
-            <Select value={lead.status} onValueChange={updateStatus}>
+            <Select value={lead.status} onValueChange={updateStatus} disabled={statusSaving}>
               <SelectTrigger className="h-8 text-[12px] w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {["New","Contacted","Replied","Interested","Meeting Booked","Closed","Unresponsive","Opted Out"].map(s => (

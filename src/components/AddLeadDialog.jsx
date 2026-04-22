@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
-// base44.entities.Workspace used inline
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,27 +8,59 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 
+const EMPTY_FORM = { name: "", email: "", company: "", title: "", phone: "", priority: "Medium" };
+
 export default function AddLeadDialog({ open, onClose, onSuccess }) {
-  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", priority: "Medium" });
+  const { workspace } = useWorkspace();
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email) return;
+    if (saving) return;
+    if (!form.name.trim() || !form.email.trim()) return;
+    if (!workspace?.id) {
+      toast({ title: "Workspace not ready", description: "Please refresh and try again.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
-    const user = await base44.auth.me();
-    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-    const workspaceId = workspaces[0]?.id;
-    await base44.entities.Lead.create({ ...form, workspace_id: workspaceId, source: "Manual Entry", status: "New" });
-    toast({ title: "Lead added successfully" });
-    setForm({ name: "", email: "", company: "", title: "", phone: "", priority: "Medium" });
-    setSaving(false);
-    onSuccess();
+    try {
+      const email = form.email.trim().toLowerCase();
+      // Duplicate guard (scoped to workspace)
+      const existing = await base44.entities.Lead
+        .filter({ workspace_id: workspace.id, email }, "-created_date", 1)
+        .catch(() => []);
+      if (existing.length > 0) {
+        toast({ title: "Lead already exists", description: `${email} is already in this workspace.`, variant: "destructive" });
+        setSaving(false);
+        return;
+      }
+      await base44.entities.Lead.create({
+        ...form,
+        name: form.name.trim(),
+        email,
+        workspace_id: workspace.id,
+        source: "Manual Entry",
+        status: "New",
+      });
+      toast({ title: "Lead added", description: `${form.name.trim()} added to your workspace.` });
+      setForm(EMPTY_FORM);
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      toast({ title: "Could not add lead", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (saving) return;
     onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add New Lead</DialogTitle>
@@ -68,8 +100,8 @@ export default function AddLeadDialog({ open, onClose, onSuccess }) {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Add Lead"}</Button>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" disabled={saving || !workspace?.id}>{saving ? "Saving..." : "Add Lead"}</Button>
           </div>
         </form>
       </DialogContent>

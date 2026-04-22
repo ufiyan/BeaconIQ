@@ -60,24 +60,36 @@ export default function EmailIngestionTab() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.leads_inbox.trim()) {
       toast({ title: "Please enter your leads inbox address", variant: "destructive" });
       return;
     }
     setSaving(true);
-    const user = await base44.auth.me();
-    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-    const workspaceId = workspaces[0]?.id;
-    const data = { ...form, workspace_id: workspaceId, is_active: !!(gmailStatus?.connected && form.leads_inbox) };
-    if (settings) {
-      await base44.entities.EmailIngestionSettings.update(settings.id, data);
-    } else {
-      const created = await base44.entities.EmailIngestionSettings.create(data);
-      setSettings(created);
+    try {
+      const user = await base44.auth.me();
+      const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+      const workspaceId = workspaces[0]?.id;
+      const data = {
+        ...form,
+        leads_inbox: form.leads_inbox.trim(),
+        workspace_id: workspaceId,
+        is_active: !!(gmailStatus?.connected && form.leads_inbox.trim()),
+      };
+      if (settings) {
+        await base44.entities.EmailIngestionSettings.update(settings.id, data);
+        // Optimistic — no need for full reload
+        setSettings(prev => ({ ...prev, ...data }));
+      } else {
+        const created = await base44.entities.EmailIngestionSettings.create(data);
+        setSettings(created);
+      }
+      toast({ title: "Ingestion settings saved" });
+    } catch (err) {
+      toast({ title: "Could not save settings", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    toast({ title: "Ingestion settings saved!" });
-    setSaving(false);
-    loadAll();
   };
 
   // Clean up polling on unmount
@@ -124,16 +136,23 @@ export default function EmailIngestionTab() {
   };
 
   const handleSyncNow = async () => {
+    if (syncing) return;
     setSyncing(true);
-    const res = await base44.functions.invoke('gmailSync', {}).catch(e => ({ data: { error: e.message } }));
-    if (res?.data?.error) {
-      toast({ title: "Sync failed: " + res.data.error, variant: "destructive" });
-    } else {
-      const s = res?.data?.stats;
-      toast({ title: `Sync complete — ${s?.scanned || 0} scanned · ${s?.created || 0} created · ${s?.reviewed || 0} reviewed · ${s?.skipped || 0} skipped` });
+    try {
+      const res = await base44.functions.invoke('gmailSync', {});
+      const err = res?.data?.error;
+      if (err) {
+        toast({ title: "Sync failed", description: err, variant: "destructive" });
+      } else {
+        const s = res?.data?.stats;
+        toast({ title: `Sync complete — ${s?.scanned || 0} scanned · ${s?.created || 0} created · ${s?.reviewed || 0} reviewed · ${s?.skipped || 0} skipped` });
+      }
+    } catch (err) {
+      toast({ title: "Sync failed", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+      loadAll();
     }
-    setSyncing(false);
-    loadAll();
   };
 
   if (loading) {

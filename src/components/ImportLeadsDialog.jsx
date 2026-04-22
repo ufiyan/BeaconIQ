@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
@@ -22,6 +23,7 @@ function parseCSV(text) {
 }
 
 export default function ImportLeadsDialog({ open, onClose, onSuccess }) {
+  const { workspace } = useWorkspace();
   const [step, setStep] = useState("upload"); // upload | mapping | importing | done
   const [file, setFile] = useState(null);
   const [csvText, setCsvText] = useState("");
@@ -75,73 +77,89 @@ Sample Data: ${JSON.stringify(sampleData)}`,
   const isMapped = (field) => getMappedFields().includes(field);
 
   const runImport = async () => {
+    if (importing) return;
+    if (!workspace?.id) {
+      toast({ title: "Workspace not ready", description: "Please refresh and try again.", variant: "destructive" });
+      return;
+    }
     setImporting(true);
     setStep("importing");
 
-    // Parse all rows
-    const allLines = csvText.trim().split("\n");
-    const allRows = allLines.slice(1).map(line => {
-      const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-      const obj = {};
-      headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
-      return obj;
-    });
-
-    let imported = 0, skippedMissing = 0, duplicates = 0, customFieldCols = 0;
-    const customHeaders = headers.filter(h => mapping[h] === "custom");
-    if (customHeaders.length > 0) customFieldCols = customHeaders.length;
-
-    // Fetch existing emails for duplicate check — scoped to current user only
-    const user = await base44.auth.me();
-    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-    const workspaceId = workspaces[0]?.id;
-    const existingLeads = await base44.entities.Lead.filter({ created_by: user.email }, "-created_date", 1000);
-    const existingEmails = new Set(existingLeads.map(l => l.email?.toLowerCase()).filter(Boolean));
-
-    const leadsToCreate = [];
-
-    for (const row of allRows) {
-      const lead = {};
-      const customFields = {};
-
-      headers.forEach(h => {
-        const field = mapping[h];
-        if (field === "skip" || !field) return;
-        if (field === "custom") {
-          if (row[h]) customFields[h] = row[h];
-        } else {
-          lead[field] = row[h] || "";
-        }
+    try {
+      // Parse all rows
+      const allLines = csvText.trim().split("\n");
+      const allRows = allLines.slice(1).map(line => {
+        const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+        return obj;
       });
 
-      if (!lead.name && !lead.email) { skippedMissing++; continue; }
-      if (!lead.name) { skippedMissing++; continue; }
-      if (!lead.email) { skippedMissing++; continue; }
-      if (existingEmails.has(lead.email.toLowerCase())) { duplicates++; continue; }
+      let imported = 0, skippedMissing = 0, duplicates = 0, customFieldCols = 0;
+      const customHeaders = headers.filter(h => mapping[h] === "custom");
+      if (customHeaders.length > 0) customFieldCols = customHeaders.length;
 
-      leadsToCreate.push({
-        ...lead,
-        workspace_id: workspaceId,
-        source: "CSV Upload",
-        status: "New",
-        priority: "Medium",
-        ...(Object.keys(customFields).length > 0 ? { custom_fields: JSON.stringify(customFields) } : {})
-      });
-      existingEmails.add(lead.email.toLowerCase());
+      // Fetch existing emails for duplicate check — scoped to current workspace
+      const existingLeads = await base44.entities.Lead
+        .filter({ workspace_id: workspace.id }, "-created_date", 1000)
+        .catch(() => []);
+      const existingEmails = new Set(existingLeads.map(l => l.email?.toLowerCase()).filter(Boolean));
+
+      const leadsToCreate = [];
+
+      for (const row of allRows) {
+        const lead = {};
+        const customFields = {};
+
+        headers.forEach(h => {
+          const field = mapping[h];
+          if (field === "skip" || !field) return;
+          if (field === "custom") {
+            if (row[h]) customFields[h] = row[h];
+          } else {
+            lead[field] = row[h] || "";
+          }
+        });
+
+        if (!lead.name && !lead.email) { skippedMissing++; continue; }
+        if (!lead.name) { skippedMissing++; continue; }
+        if (!lead.email) { skippedMissing++; continue; }
+        const normalized = lead.email.trim().toLowerCase();
+        if (!normalized) { skippedMissing++; continue; }
+        // Dedupe within CSV too (same email appearing twice in file)
+        if (existingEmails.has(normalized)) { duplicates++; continue; }
+
+        leadsToCreate.push({
+          ...lead,
+          email: normalized,
+          name: lead.name.trim(),
+          workspace_id: workspace.id,
+          source: "CSV Upload",
+          status: "New",
+          priority: "Medium",
+          ...(Object.keys(customFields).length > 0 ? { custom_fields: JSON.stringify(customFields) } : {})
+        });
+        existingEmails.add(normalized);
+      }
+
+      if (leadsToCreate.length > 0) {
+        await base44.entities.Lead.bulkCreate(leadsToCreate);
+        imported = leadsToCreate.length;
+      }
+
+      setSummary({ imported, skippedMissing, duplicates, customFieldCols });
+      setStep("done");
+      onSuccess?.();
+    } catch (err) {
+      toast({ title: "Import failed", description: err?.message || "Please try again.", variant: "destructive" });
+      setStep("mapping");
+    } finally {
+      setImporting(false);
     }
-
-    if (leadsToCreate.length > 0) {
-      await base44.entities.Lead.bulkCreate(leadsToCreate);
-      imported = leadsToCreate.length;
-    }
-
-    setSummary({ imported, skippedMissing, duplicates, customFieldCols });
-    setImporting(false);
-    setStep("done");
-    onSuccess();
   };
 
   const handleClose = () => {
+    if (importing || analyzing) return;
     setStep("upload");
     setFile(null);
     setCsvText("");

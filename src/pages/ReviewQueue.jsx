@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,19 +19,36 @@ function confidenceStyle(score) {
 }
 
 export default function ReviewQueue() {
+  const { workspace, isLoading: wsLoading } = useWorkspace();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bulkApproving, setBulkApproving] = useState(false);
   const [editing, setEditing] = useState({});
+  const [processingIds, setProcessingIds] = useState(() => new Set());
 
-  useEffect(() => { loadItems(); }, []);
+  useEffect(() => { if (!wsLoading) loadItems(); }, [workspace, wsLoading]);
 
   const loadItems = async () => {
     setLoading(true);
-    const user = await base44.auth.me();
-    const data = await base44.entities.EmailIngestionLog.filter({ created_by: user.email, result: "pending_review" }, "-created_date", 100);
-    setItems(data);
-    setLoading(false);
+    try {
+      const filter = workspace?.id
+        ? { workspace_id: workspace.id, result: "pending_review" }
+        : { result: "pending_review" };
+      const data = await base44.entities.EmailIngestionLog.filter(filter, "-created_date", 100);
+      setItems(data);
+    } catch (err) {
+      toast({ title: "Could not load review queue", description: err?.message || "Please refresh.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const markProcessing = (id, on) => {
+    setProcessingIds(prev => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
   };
 
   const getFields = (item) => ({
@@ -46,55 +64,133 @@ export default function ReviewQueue() {
     setEditing(prev => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
   };
 
-  const createLead = async (item) => {
-    const user = await base44.auth.me();
+  // Internal worker — does NOT toast or reload. Used by single + bulk flows.
+  const processApproval = async (item) => {
     const fields = getFields(item);
-    const email = item.extracted_email || item.sender_email;
-    const existing = await base44.entities.Lead.filter({ email, created_by: user.email });
-    let leadId;
+    const rawEmail = item.extracted_email || item.sender_email;
+    const email = (rawEmail || "").trim().toLowerCase();
+    if (!email) throw new Error("Missing sender email");
+
+    // Re-check latest status to guard against double-approval
+    const latestLog = await base44.entities.EmailIngestionLog
+      .filter({ id: item.id }, "-created_date", 1)
+      .catch(() => [item]);
+    if (latestLog[0]?.result !== "pending_review") {
+      return { skipped: true, reason: "already-processed" };
+    }
+
+    const dupFilter = workspace?.id
+      ? { workspace_id: workspace.id, email }
+      : { email };
+    const existing = await base44.entities.Lead.filter(dupFilter, "-created_date", 1).catch(() => []);
+
     if (existing.length > 0) {
       const lead = existing[0];
       const note = item.email_body_summary || item.subject || "";
-      await base44.entities.Lead.update(lead.id, {
-        notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
+      if (note) {
+        await base44.entities.Lead.update(lead.id, {
+          notes: lead.notes ? `${lead.notes}\n\n${note}` : note,
+        });
+      }
+      await base44.entities.EmailIngestionLog.update(item.id, {
+        result: "duplicate_updated",
+        lead_id: lead.id,
       });
-      leadId = lead.id;
-      await base44.entities.EmailIngestionLog.update(item.id, { result: "duplicate_updated", lead_id: leadId });
-      toast({ title: "Existing lead updated with new note" });
-    } else {
-      const newLead = await base44.entities.Lead.create({
-        name: fields.name || email,
-        email, company: fields.company, title: fields.title,
-        phone: fields.phone, industry: fields.industry,
-        source: "Gmail Ingestion", status: "New", priority: "Medium",
-        notes: item.email_body_summary || "",
-      });
-      leadId = newLead.id;
-      await base44.entities.EmailIngestionLog.update(item.id, { result: "lead_created", lead_id: leadId });
-      toast({ title: "Lead created successfully" });
+      return { updated: true, leadId: lead.id };
     }
-    loadItems();
+
+    const newLead = await base44.entities.Lead.create({
+      workspace_id: workspace?.id,
+      name: fields.name?.trim() || email,
+      email,
+      company: fields.company || "",
+      title: fields.title || "",
+      phone: fields.phone || "",
+      industry: fields.industry || "",
+      source: "Email Ingestion",
+      status: "New",
+      priority: "Medium",
+      notes: item.email_body_summary || "",
+    });
+    await base44.entities.EmailIngestionLog.update(item.id, {
+      result: "lead_created",
+      lead_id: newLead.id,
+    });
+    return { created: true, leadId: newLead.id };
+  };
+
+  const createLead = async (item) => {
+    if (processingIds.has(item.id)) return;
+    markProcessing(item.id, true);
+    // Optimistic: remove from queue immediately
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    try {
+      const res = await processApproval(item);
+      if (res?.skipped) toast({ title: "Already processed", description: "This item was handled already." });
+      else if (res?.updated) toast({ title: "Existing lead updated with new note" });
+      else toast({ title: "Lead created successfully" });
+    } catch (err) {
+      // Rollback the optimistic remove on failure
+      setItems(prev => (prev.some(i => i.id === item.id) ? prev : [item, ...prev]));
+      toast({ title: "Could not approve item", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      markProcessing(item.id, false);
+    }
   };
 
   const dismissItem = async (item) => {
-    await base44.entities.EmailIngestionLog.update(item.id, { result: "skipped", skip_reason: "manually dismissed" });
-    toast({ title: "Item dismissed" });
-    loadItems();
+    if (processingIds.has(item.id)) return;
+    markProcessing(item.id, true);
+    // Optimistic removal
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    try {
+      await base44.entities.EmailIngestionLog.update(item.id, { result: "skipped", skip_reason: "manually dismissed" });
+      toast({ title: "Item dismissed" });
+    } catch (err) {
+      setItems(prev => (prev.some(i => i.id === item.id) ? prev : [item, ...prev]));
+      toast({ title: "Could not dismiss", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      markProcessing(item.id, false);
+    }
   };
 
   const bulkApprove = async () => {
+    if (bulkApproving) return;
+    const highConf = items.filter(i => (i.confidence_score || 0) >= 70 && !processingIds.has(i.id));
+    if (highConf.length === 0) return;
     setBulkApproving(true);
-    const highConf = items.filter(i => (i.confidence_score || 0) >= 70);
+    // Optimistic: remove all at once
+    const targetIds = new Set(highConf.map(i => i.id));
+    const snapshot = highConf;
+    setItems(prev => prev.filter(i => !targetIds.has(i.id)));
+    let created = 0, updated = 0, failed = 0;
+    // Sequential — prevents concurrent duplicate-lead creation for same email
     for (const item of highConf) {
-      await createLead(item).catch(() => {});
+      try {
+        const r = await processApproval(item);
+        if (r?.created) created++;
+        else if (r?.updated) updated++;
+      } catch {
+        failed++;
+      }
     }
-    toast({ title: `${highConf.length} leads created from high-confidence emails` });
+    if (failed > 0) {
+      // Restore failed items (best effort: reload from server to get accurate queue)
+      await loadItems();
+      toast({
+        title: `Processed ${created + updated} of ${snapshot.length}`,
+        description: `${created} created, ${updated} updated, ${failed} failed.`,
+        variant: failed === snapshot.length ? "destructive" : undefined,
+      });
+    } else {
+      toast({ title: `${created + updated} items processed`, description: `${created} leads created, ${updated} updated.` });
+    }
     setBulkApproving(false);
   };
 
   const highConfCount = items.filter(i => (i.confidence_score || 0) >= 70).length;
 
-  if (loading) {
+  if (wsLoading || loading) {
     return (
       <div className="p-6 lg:p-8 max-w-4xl mx-auto">
         <PageHeader title="Review Queue" description="Loading…" />
@@ -194,10 +290,22 @@ export default function ReviewQueue() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button onClick={() => createLead(item)} className="h-8 text-[12px] gap-1.5">
-                      <CheckCircle className="h-3.5 w-3.5" /> Approve & create lead
+                    <Button
+                      onClick={() => createLead(item)}
+                      disabled={processingIds.has(item.id) || bulkApproving}
+                      className="h-8 text-[12px] gap-1.5"
+                    >
+                      {processingIds.has(item.id)
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <CheckCircle className="h-3.5 w-3.5" />}
+                      Approve & create lead
                     </Button>
-                    <Button variant="outline" onClick={() => dismissItem(item)} className="h-8 text-[12px] gap-1.5">
+                    <Button
+                      variant="outline"
+                      onClick={() => dismissItem(item)}
+                      disabled={processingIds.has(item.id) || bulkApproving}
+                      className="h-8 text-[12px] gap-1.5"
+                    >
                       <XCircle className="h-3.5 w-3.5" /> Dismiss
                     </Button>
                   </div>

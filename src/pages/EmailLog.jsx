@@ -6,6 +6,7 @@ import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { SkeletonTable } from "../components/SkeletonTable";
+import { toast } from "@/components/ui/use-toast";
 import moment from "moment";
 
 export default function EmailLog() {
@@ -15,10 +16,17 @@ export default function EmailLog() {
 
   useEffect(() => {
     if (workspaceLoading || !workspace) return;
-    base44.entities.EmailLog.filter({ workspace_id: workspace.id }, "-created_date", 100).then(data => {
-      setEmails(data);
-      setLoading(false);
-    });
+    let cancelled = false;
+    base44.entities.EmailLog
+      .filter({ workspace_id: workspace.id }, "-created_date", 100)
+      .then(data => { if (!cancelled) { setEmails(data); setLoading(false); } })
+      .catch(err => {
+        if (!cancelled) {
+          setLoading(false);
+          toast({ title: "Could not load emails", description: err?.message || "Please refresh.", variant: "destructive" });
+        }
+      });
+    return () => { cancelled = true; };
   }, [workspace, workspaceLoading]);
 
   if (workspaceLoading || loading) {

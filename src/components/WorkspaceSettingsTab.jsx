@@ -94,12 +94,20 @@ export default function WorkspaceSettingsTab() {
   };
 
   const handleSaveName = async () => {
+    if (savingName) return;
     if (!workspace || !workspaceName.trim()) return;
+    const newName = workspaceName.trim();
+    if (newName === workspace.name) return; // no-op
     setSavingName(true);
-    await base44.entities.Workspace.update(workspace.id, { name: workspaceName.trim() });
-    setWorkspace(prev => ({ ...prev, name: workspaceName.trim() }));
-    toast({ title: "Workspace name updated!" });
-    setSavingName(false);
+    try {
+      await base44.entities.Workspace.update(workspace.id, { name: newName });
+      setWorkspace(prev => ({ ...prev, name: newName }));
+      toast({ title: "Workspace name updated" });
+    } catch (err) {
+      toast({ title: "Could not update workspace", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSavingName(false);
+    }
   };
 
   const handleConnectGmail = () => {
@@ -126,42 +134,55 @@ export default function WorkspaceSettingsTab() {
   };
 
   const handleDisconnectGmail = async () => {
-    if (!workspace) return;
+    if (disconnectingGmail || !workspace) return;
     setDisconnectingGmail(true);
-    const settings = await base44.entities.EmailIngestionSettings.filter({ workspace_id: workspace.id });
-    if (settings.length > 0) {
-      await base44.entities.EmailIngestionSettings.update(settings[0].id, {
+    try {
+      const settings = await base44.entities.EmailIngestionSettings
+        .filter({ workspace_id: workspace.id })
+        .catch(() => []);
+      if (settings.length > 0) {
+        await base44.entities.EmailIngestionSettings.update(settings[0].id, {
+          gmail_connected: false,
+          gmail_access_token: "",
+          gmail_refresh_token: "",
+          gmail_token_expiry: null,
+          gmail_email: "",
+          is_active: false,
+        });
+      }
+      await base44.entities.Workspace.update(workspace.id, {
         gmail_connected: false,
-        gmail_access_token: "",
-        gmail_refresh_token: "",
-        gmail_token_expiry: null,
         gmail_email: "",
-        is_active: false,
       });
+      setWorkspace(prev => ({ ...prev, gmail_connected: false, gmail_email: "" }));
+      toast({ title: "Gmail disconnected" });
+    } catch (err) {
+      toast({ title: "Could not disconnect Gmail", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setDisconnectingGmail(false);
     }
-    await base44.entities.Workspace.update(workspace.id, {
-      gmail_connected: false,
-      gmail_email: "",
-    });
-    setWorkspace(prev => ({ ...prev, gmail_connected: false, gmail_email: "" }));
-    toast({ title: "Gmail disconnected" });
-    setDisconnectingGmail(false);
   };
 
   const handleSaveAi = async () => {
-    if (!workspace) return;
+    if (savingAi || !workspace) return;
     setSavingAi(true);
-    const update = { ai_provider: aiProvider };
-    if (aiProvider !== "base44") {
-      if (aiApiKey.trim()) update.ai_api_key = aiApiKey.trim();
-      if (aiModel.trim()) update.ai_model = aiModel.trim();
-    } else {
-      update.ai_api_key = "";
-      update.ai_model = "";
+    try {
+      const update = { ai_provider: aiProvider };
+      if (aiProvider !== "base44") {
+        if (aiApiKey.trim()) update.ai_api_key = aiApiKey.trim();
+        if (aiModel.trim()) update.ai_model = aiModel.trim();
+      } else {
+        update.ai_api_key = "";
+        update.ai_model = "";
+      }
+      await base44.entities.Workspace.update(workspace.id, update);
+      setWorkspace(prev => ({ ...prev, ...update }));
+      toast({ title: "AI settings saved" });
+    } catch (err) {
+      toast({ title: "Could not save AI settings", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setSavingAi(false);
     }
-    await base44.entities.Workspace.update(workspace.id, update);
-    toast({ title: "AI settings saved!" });
-    setSavingAi(false);
   };
 
   if (loading) {
