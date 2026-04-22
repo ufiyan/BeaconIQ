@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import TemplateModal from "@/components/TemplateModal";
 import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import { SkeletonTable } from "@/components/SkeletonTable";
 
 export default function Templates() {
   const { workspace } = useWorkspace();
@@ -41,66 +43,60 @@ export default function Templates() {
   const openNew = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (t) => { setEditing(t); setModalOpen(true); };
 
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+        <PageHeader title="Email Templates" description="Loading…" />
+        <SkeletonTable rows={4} cols={3} />
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white">Email Templates</h1>
-          <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>
-            Templates are matched to leads by intent score and used as a base for AI-personalized emails.
-          </p>
-        </div>
-        <Button onClick={openNew} className="text-xs h-8 gap-1.5" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
+    <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+      <PageHeader
+        title="Email Templates"
+        description="Templates are matched to leads by intent score and used as a base for AI-personalized emails."
+      >
+        <Button onClick={openNew} className="gap-1.5 h-9 text-[13px]">
           <Plus className="h-3.5 w-3.5" /> New Template
         </Button>
-      </div>
+      </PageHeader>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+      {templates.length === 0 ? (
+        <div className="surface rounded-xl">
+          <EmptyState icon={FileText} title="No templates yet" description="Create templates to speed up personalized outreach based on lead intent scores.">
+            <Button onClick={openNew} className="h-9 text-[13px] gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> New Template
+            </Button>
+          </EmptyState>
         </div>
-      ) : templates.length === 0 ? (
-        <EmptyState icon={FileText} title="No templates yet" description="Create templates to speed up personalized outreach based on lead intent scores.">
-          <Button onClick={openNew} className="text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> New Template
-          </Button>
-        </EmptyState>
       ) : (
         <div className="space-y-3">
           {templates.map(t => (
-            <div key={t.id} className="rounded-xl p-4 flex items-start gap-4"
-              style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-              <div className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(59,130,246,0.12)" }}>
-                <FileText className="h-4 w-4" style={{ color: "#3B82F6" }} />
+            <div key={t.id} className="surface rounded-xl p-4 flex items-start gap-4">
+              <div className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary/10 border border-primary/20">
+                <FileText className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-white">{t.name}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>
-                    IQ {t.intent_range_min ?? 0}–{t.intent_range_max ?? 100}
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-[14px] font-semibold text-white">{t.name}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-warning/10 text-warning border border-warning/20">
+                    Intent {t.intent_range_min ?? 0}–{t.intent_range_max ?? 100}
                   </span>
                   {t.use_count > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full"
-                      style={{ background: "rgba(99,102,241,0.12)", color: "#818CF8" }}>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-accent/10 text-accent border border-accent/20">
                       Used {t.use_count}×
                     </span>
                   )}
                 </div>
-                <p className="text-xs mt-0.5 truncate" style={{ color: "#94A3B8" }}>
-                  Subject: {t.subject}
-                </p>
+                <p className="text-[12px] text-muted-foreground truncate">Subject: {t.subject}</p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(t)}
-                  style={{ color: "#94A3B8" }}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(t.id)}
-                  style={{ color: "#94A3B8" }}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(t.id)}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -109,12 +105,7 @@ export default function Templates() {
         </div>
       )}
 
-      <TemplateModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        template={editing}
-        onSave={handleSave}
-      />
+      <TemplateModal open={modalOpen} onClose={() => setModalOpen(false)} template={editing} onSave={handleSave} />
     </div>
   );
 }

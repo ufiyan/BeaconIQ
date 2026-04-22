@@ -24,6 +24,7 @@ export default function EmailLog() {
   if (workspaceLoading || loading) {
     return (
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+        <PageHeader title="Sent Emails" description="Loading…" />
         <SkeletonTable rows={6} cols={4} />
       </div>
     );
@@ -31,35 +32,38 @@ export default function EmailLog() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      <PageHeader title="Email Log" description={`${emails.length} emails sent`} />
+      <PageHeader title="Sent Emails" description={`${emails.length} email${emails.length !== 1 ? 's' : ''} sent`} />
 
       {emails.length === 0 ? (
-        <EmptyState icon={Mail} title="No emails sent yet" description="Generate and send emails from lead detail pages" />
+        <div className="surface rounded-xl">
+          <EmptyState icon={Mail} title="No emails sent yet" description="Generate personalized AI emails from any lead detail page — they'll log here automatically." />
+        </div>
       ) : (
-        <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
+        <div className="surface rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-                  {["Recipient","Subject","Status","Sent"].map((h, i) => (
-                    <th key={h} className={`text-left px-5 py-3 text-xs font-medium ${i > 1 ? "hidden md:table-cell" : ""}`} style={{ color: "#94A3B8" }}>{h}</th>
-                  ))}
+                <tr className="border-b border-border bg-secondary/30">
+                  <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recipient</th>
+                  <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Subject</th>
+                  <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hidden md:table-cell">Status</th>
+                  <th className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hidden md:table-cell">Sent</th>
                 </tr>
               </thead>
               <tbody>
-                {emails.map((email, idx) => (
-                  <tr key={email.id} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)", borderBottom: "0.5px solid hsl(var(--border))" }}>
-                    <td className="px-5 py-3.5">
-                      <p className="text-xs font-medium text-white">{email.lead_name || "Unknown"}</p>
-                      <p className="text-xs" style={{ color: "#94A3B8" }}>{email.lead_email}</p>
+                {emails.map((email) => (
+                  <tr key={email.id} className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors">
+                    <td className="px-5 py-3">
+                      <p className="text-[13px] font-medium text-white truncate">{email.lead_name || "Unknown"}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{email.lead_email}</p>
                     </td>
-                    <td className="px-5 py-3.5">
-                      <p className="text-xs text-white truncate max-w-xs">{email.subject}</p>
+                    <td className="px-5 py-3">
+                      <p className="text-[13px] text-white truncate max-w-xs">{email.subject}</p>
                     </td>
-                    <td className="px-5 py-3.5 hidden md:table-cell">
+                    <td className="px-5 py-3 hidden md:table-cell">
                       <StatusBadge status={email.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>
+                    <td className="px-5 py-3 text-[12px] text-muted-foreground hidden md:table-cell">
                       {email.sent_at ? moment(email.sent_at).format("MMM D, h:mm A") : "—"}
                     </td>
                   </tr>

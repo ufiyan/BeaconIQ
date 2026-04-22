@@ -6,26 +6,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Send, Loader2 } from "lucide-react";
+import { Sparkles, Send, Loader2, Target, Building, Zap, User, RefreshCw } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
-export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) {
+function ContextChip({ icon: Icon, label, value, color = "primary" }) {
+  const colors = {
+    primary: "bg-primary/10 text-primary border-primary/20",
+    accent:  "bg-accent/10 text-accent border-accent/20",
+    amber:   "bg-warning/10 text-warning border-warning/25",
+    green:   "bg-success/10 text-success border-success/25",
+  };
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border ${colors[color]}`}>
+      <Icon className="h-3 w-3 flex-shrink-0" />
+      <span className="text-muted-foreground">{label}:</span>
+      <span className="truncate max-w-[180px]">{value}</span>
+    </div>
+  );
+}
+
+export default function GenerateEmailDialog({ open, onClose, lead, intentScore: initialIntentScore, onSuccess }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [sending, setSending] = useState(false);
   const [profile, setProfile] = useState(null);
-  const [pendingEmail, setPendingEmail] = useState(null); // waiting for send confirmation
-  const [remindTimer, setRemindTimer] = useState(null);
+  const [intentScore, setIntentScore] = useState(initialIntentScore || null);
+  const [pendingEmail, setPendingEmail] = useState(null);
+
+  useEffect(() => { setIntentScore(initialIntentScore || null); }, [initialIntentScore]);
 
   useEffect(() => {
-    if (open) {
-      base44.auth.me().then(user => {
-      base44.entities.BusinessProfile.filter({ created_by: user.email }, "-created_date", 1).then(p => {
-        if (p.length > 0) setProfile(p[0]);
-      }); });
-    }
-  }, [open]);
+    if (!open) return;
+    base44.auth.me().then(async user => {
+      const [p, s] = await Promise.all([
+        base44.entities.BusinessProfile.filter({ created_by: user.email }, "-created_date", 1),
+        initialIntentScore ? Promise.resolve([initialIntentScore]) :
+          base44.entities.IntentScore.filter({ lead_id: lead.id, created_by: user.email }, "-scored_at", 1).catch(() => []),
+      ]);
+      if (p.length > 0) setProfile(p[0]);
+      if (s.length > 0) setIntentScore(s[0]);
+    });
+  }, [open, lead?.id, initialIntentScore]);
 
   const generateEmail = async () => {
     setGenerating(true);
@@ -33,21 +54,15 @@ export default function GenerateEmailDialog({ open, onClose, lead, onSuccess }) 
       ? `Business: ${profile.business_name}. Description: ${profile.description}. Target audience: ${profile.target_audience}. Tone: ${profile.tone}. Goal: ${profile.sales_goal}. Products/Services: ${profile.products_services || 'N/A'}.`
       : "A professional business reaching out to potential clients.";
 
-    // Fetch intent score for richer email context
     let intentContext = "";
-    let decisionAuthority = null;
-    try {
-      const scores = await base44.entities.IntentScore.filter({ lead_id: lead.id }, "-scored_at", 1);
-      if (scores[0]) {
-        const s = scores[0];
-        if (s.pain_point) intentContext += `\nThe lead specifically mentioned this problem: "${s.pain_point}". Reference this directly in the email.`;
-        if (s.urgency_signals) intentContext += `\nThe lead showed these urgency signals: "${s.urgency_signals}". Acknowledge their timeline.`;
-        if (s.urgency_level) intentContext += `\nUrgency level: ${s.urgency_level}.`;
-        decisionAuthority = s.decision_authority;
-        if (decisionAuthority === 'High') intentContext += `\nTone instruction: Write peer-to-peer as one executive to another — confident, direct, no fluff.`;
-        else if (decisionAuthority === 'Low') intentContext += `\nTone instruction: Write as educational and helpful — explain value clearly, no pressure.`;
-      }
-    } catch (_) {}
+    if (intentScore) {
+      const s = intentScore;
+      if (s.pain_point) intentContext += `\nThe lead specifically mentioned this problem: "${s.pain_point}". Reference this directly in the email.`;
+      if (s.urgency_signals) intentContext += `\nThe lead showed these urgency signals: "${s.urgency_signals}". Acknowledge their timeline.`;
+      if (s.urgency_level) intentContext += `\nUrgency level: ${s.urgency_level}.`;
+      if (s.decision_authority === 'High') intentContext += `\nTone instruction: Write peer-to-peer as one executive to another — confident, direct, no fluff.`;
+      else if (s.decision_authority === 'Low') intentContext += `\nTone instruction: Write as educational and helpful — explain value clearly, no pressure.`;
+    }
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt: `You are an expert sales copywriter. Generate a personalized cold outreach email.
@@ -81,7 +96,6 @@ Output JSON with "subject" and "body" fields.`,
 
   const sendEmail = () => {
     if (!subject || !body) return;
-    // Open Gmail but don't log yet — wait for confirmation
     const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank');
     setPendingEmail({ subject, body });
@@ -104,7 +118,7 @@ Output JSON with "subject" and "body" fields.`,
       last_contacted: new Date().toISOString(),
       total_emails_sent: (lead.total_emails_sent || 0) + 1
     });
-    toast({ title: "Email logged as sent!" });
+    toast({ title: "Email logged as sent" });
     setPendingEmail(null);
     setSubject(""); setBody("");
     onSuccess(); onClose();
@@ -116,10 +130,6 @@ Output JSON with "subject" and "body" fields.`,
   };
 
   const remindLater = () => {
-    const timer = setTimeout(() => {
-      setPendingEmail(prev => prev); // re-show by keeping pendingEmail set
-    }, 5 * 60 * 1000);
-    setRemindTimer(timer);
     setPendingEmail(prev => ({ ...prev, snoozed: true }));
     toast({ title: "Reminder set — we'll ask again in 5 minutes" });
     setSubject(""); setBody("");
@@ -129,52 +139,68 @@ Output JSON with "subject" and "body" fields.`,
   const handleClose = () => {
     setSubject("");
     setBody("");
-    if (!pendingEmail) onClose();
-    else onClose();
+    onClose();
   };
+
+  const hasContent = subject || body;
 
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>AI Email to {lead?.name}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-[15px]">
+            <div className="h-7 w-7 rounded-md flex items-center justify-center bg-accent/15 border border-accent/25">
+              <Sparkles className="h-3.5 w-3.5 text-accent" />
+            </div>
+            AI Email to {lead?.name}
+          </DialogTitle>
         </DialogHeader>
-        
+
+        {/* Context chips */}
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {profile?.business_name && <ContextChip icon={Building} label="From" value={profile.business_name} color="primary" />}
+          {profile?.tone && <ContextChip icon={User} label="Tone" value={profile.tone} color="primary" />}
+          {profile?.sales_goal && <ContextChip icon={Target} label="Goal" value={profile.sales_goal} color="green" />}
+          {intentScore?.urgency_level && <ContextChip icon={Zap} label="Urgency" value={intentScore.urgency_level} color="amber" />}
+          {intentScore?.pain_point && <ContextChip icon={Sparkles} label="Pain" value={intentScore.pain_point.slice(0, 40)} color="accent" />}
+        </div>
+
         <div className="space-y-4">
-          {!subject && !body ? (
-            <div className="flex flex-col items-center py-8">
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-                <Sparkles className="h-7 w-7 text-primary" />
+          {!hasContent ? (
+            <div className="flex flex-col items-center py-8 px-4 text-center">
+              <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4 bg-accent/10 border border-accent/20">
+                <Sparkles className="h-5 w-5 text-accent" />
               </div>
-              <p className="text-sm text-muted-foreground text-center mb-4">
-                AI will generate a personalized email based on your business profile and lead details
+              <p className="text-[14px] font-semibold text-white">Generate a personalized email</p>
+              <p className="text-[12px] text-muted-foreground mt-1 max-w-sm leading-relaxed">
+                AI will write on-brand outreach using your business profile and this lead's intent signals.
               </p>
-              <Button onClick={generateEmail} disabled={generating} className="gap-2">
+              <Button onClick={generateEmail} disabled={generating} className="gap-1.5 mt-5 h-9 text-[13px]">
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {generating ? "Generating..." : "Generate Email"}
+                {generating ? "Generating…" : "Generate email"}
               </Button>
             </div>
           ) : (
             <>
               <div>
-                <Label>Subject</Label>
-                <Input value={subject} onChange={e => setSubject(e.target.value)} />
+                <Label className="text-[12px] text-muted-foreground">Subject</Label>
+                <Input value={subject} onChange={e => setSubject(e.target.value)} className="mt-1.5 h-9 text-[13px]" />
               </div>
               <div>
-                <Label>Body</Label>
-                <Textarea value={body} onChange={e => setBody(e.target.value)} rows={8} className="resize-none" />
+                <Label className="text-[12px] text-muted-foreground">Body</Label>
+                <Textarea value={body} onChange={e => setBody(e.target.value)} rows={10} className="mt-1.5 resize-none text-[13px] leading-relaxed" />
+                <p className="text-[11px] text-muted-foreground mt-1">{body.length} chars · {body.split(/\s+/).filter(Boolean).length} words</p>
               </div>
-              <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={generateEmail} disabled={generating} className="gap-2">
-                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <Button variant="outline" onClick={generateEmail} disabled={generating} className="h-9 text-[12px] gap-1.5">
+                  {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   Regenerate
                 </Button>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleClose}>Cancel</Button>
-                  <Button onClick={sendEmail} disabled={sending} className="gap-2">
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    {sending ? "Sending..." : "Send Email"}
+                  <Button variant="ghost" onClick={handleClose} className="h-9 text-[12px]">Cancel</Button>
+                  <Button onClick={sendEmail} className="h-9 text-[13px] gap-1.5 font-semibold">
+                    <Send className="h-4 w-4" /> Send via Gmail
                   </Button>
                 </div>
               </div>

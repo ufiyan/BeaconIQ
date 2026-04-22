@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Link } from "react-router-dom";
-import { Users, Plus, Upload, Search, Clock, LayoutList, Columns } from "lucide-react";
+import { Users, Plus, Upload, Search, Clock, LayoutList, Columns, X, Mail, Briefcase, Building, ArrowRight } from "lucide-react";
 import KanbanBoard from "../components/KanbanBoard";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -17,16 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
-const PRIORITY_DOTS = {
-  High: "#EF4444",
-  Medium: "#F59E0B",
-  Low: "#94A3B8",
-};
-
 const SOURCE_STYLES = {
-  "CSV Upload": { bg: "rgba(139,92,246,0.15)", color: "#A78BFA" },
-  "Email Ingestion": { bg: "rgba(59,130,246,0.15)", color: "#3B82F6" },
-  "Manual Entry": { bg: "rgba(148,163,184,0.1)", color: "#94A3B8" },
+  "CSV Upload":       { bg: "rgba(139,92,246,0.12)",  color: "#A78BFA" },
+  "Email Ingestion":  { bg: "rgba(59,130,246,0.12)",  color: "#60A5FA" },
+  "Manual Entry":     { bg: "rgba(148,163,184,0.12)", color: "#94A3B8" },
+  "Referral":         { bg: "rgba(16,185,129,0.12)",  color: "#34D399" },
+  "Website":          { bg: "rgba(245,158,11,0.12)",  color: "#FBBF24" },
+  "Gmail Ingestion":  { bg: "rgba(59,130,246,0.12)",  color: "#60A5FA" },
 };
 
 function initials(name) {
@@ -46,6 +43,7 @@ export default function Leads() {
   const [showImport, setShowImport] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [reminderLeadIds, setReminderLeadIds] = useState(new Set());
+  const [selectedLead, setSelectedLead] = useState(null);
 
   const loadLeads = async () => {
     if (!workspace) return;
@@ -91,126 +89,216 @@ export default function Leads() {
   if (workspaceLoading || loading) {
     return (
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-        <SkeletonTable rows={8} cols={7} />
+        <PageHeader title="Leads" description="Loading your lead pipeline…" />
+        <SkeletonTable rows={8} cols={6} />
       </div>
     );
   }
 
+  const lastActivity = (lead) => {
+    const d = lead.last_contacted || lead.created_date;
+    return d ? moment(d).fromNow() : "—";
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      <PageHeader title="Leads" description={`${leads.length} total leads`}>
-        {/* View toggle */}
-        <div className="flex rounded-lg overflow-hidden" style={{ border: '0.5px solid hsl(var(--border))' }}>
-          <button onClick={() => setViewMode('list')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors" style={{ background: viewMode === 'list' ? 'hsl(var(--secondary))' : 'transparent', color: viewMode === 'list' ? 'white' : '#94A3B8' }}>
+      <PageHeader title="Leads" description={`${leads.length} total · ${filtered.length} visible`}>
+        <div className="flex items-center rounded-lg overflow-hidden border border-border bg-card">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 h-8 px-3 text-[12px] font-medium transition-colors ${viewMode === 'list' ? 'bg-secondary text-white' : 'text-muted-foreground hover:text-white'}`}
+          >
             <LayoutList className="h-3.5 w-3.5" /> List
           </button>
-          <button onClick={() => setViewMode('kanban')} className="flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors" style={{ background: viewMode === 'kanban' ? 'hsl(var(--secondary))' : 'transparent', color: viewMode === 'kanban' ? 'white' : '#94A3B8' }}>
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`flex items-center gap-1.5 h-8 px-3 text-[12px] font-medium transition-colors ${viewMode === 'kanban' ? 'bg-secondary text-white' : 'text-muted-foreground hover:text-white'}`}
+          >
             <Columns className="h-3.5 w-3.5" /> Kanban
           </button>
         </div>
-        {viewMode === 'list' && (
-          <div className="flex rounded-lg overflow-hidden" style={{ border: '0.5px solid hsl(var(--border))' }}>
-            <button onClick={() => setSortMode('intent')} className="px-3 py-1 text-xs transition-colors" style={{ background: sortMode === 'intent' ? 'hsl(var(--secondary))' : 'transparent', color: sortMode === 'intent' ? '#F59E0B' : '#94A3B8' }}>By Intent</button>
-            <button onClick={() => setSortMode('date')} className="px-3 py-1 text-xs transition-colors" style={{ background: sortMode === 'date' ? 'hsl(var(--secondary))' : 'transparent', color: sortMode === 'date' ? 'white' : '#94A3B8' }}>By Date</button>
-          </div>
-        )}
-        <Button variant="outline" onClick={() => setShowImport(true)} className="gap-2 text-xs h-8">
+        <Button variant="outline" onClick={() => setShowImport(true)} className="gap-1.5 h-8 text-[12px]">
           <Upload className="h-3.5 w-3.5" /> Import CSV
         </Button>
-        <Button onClick={() => setShowAdd(true)} className="gap-2 text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>
+        <Button onClick={() => setShowAdd(true)} className="gap-1.5 h-8 text-[12px]">
           <Plus className="h-3.5 w-3.5" /> Add Lead
         </Button>
       </PageHeader>
 
-      {/* Filters — list view only */}
-      {viewMode === 'list' && <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "#94A3B8" }} />
-          <Input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-xs" />
+      {viewMode === 'list' && (
+        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input placeholder="Search by name, email, or company…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-[13px] bg-card" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-44 h-9 text-[13px] bg-card">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {["New","Contacted","Replied","Interested","Meeting Booked","Closed","Unresponsive"].map(s => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortMode} onValueChange={setSortMode}>
+            <SelectTrigger className="w-full sm:w-40 h-9 text-[13px] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="intent">Sort by intent</SelectItem>
+              <SelectItem value="date">Sort by date</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40 h-8 text-xs">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {["New","Contacted","Replied","Interested","Meeting Booked","Closed","Unresponsive"].map(s => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>}
+      )}
 
-      {/* Kanban view */}
       {viewMode === 'kanban' && (
         <KanbanBoard leads={leads} intentScores={intentScores} onLeadUpdated={handleLeadStatusUpdate} />
       )}
 
-      {/* List view */}
       {viewMode === 'list' && (
         filtered.length === 0 ? (
-          <EmptyState icon={Users} title="No leads found" description={search ? "Try a different search" : "No leads yet. Connect your Gmail inbox and BeaconIQ will automatically find leads in your emails."}>
-            {!search && (
-              <Button onClick={() => setShowImport(true)} className="text-xs h-8" style={{ background: "#F59E0B", color: "#000", border: "none" }}>Import leads</Button>
-            )}
-          </EmptyState>
+          <div className="surface rounded-xl">
+            <EmptyState
+              icon={Users}
+              title={leads.length === 0 ? "No leads yet" : "No leads match your filters"}
+              description={
+                leads.length === 0
+                  ? "Connect your Gmail inbox and BeaconIQ will automatically capture inbound leads. Or import a CSV to get started right away."
+                  : "Try adjusting your search or status filter"
+              }
+            >
+              {leads.length === 0 ? (
+                <>
+                  <Button onClick={() => setShowImport(true)} variant="outline" className="h-8 text-[12px] gap-1.5">
+                    <Upload className="h-3.5 w-3.5" /> Import CSV
+                  </Button>
+                  <Button onClick={() => setShowAdd(true)} className="h-8 text-[12px] gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Add manually
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => { setSearch(""); setStatusFilter("all"); }} variant="outline" className="h-8 text-[12px]">Clear filters</Button>
+              )}
+            </EmptyState>
+          </div>
         ) : (
-          <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-                    {["Name","Company","Status","IQ Score","Priority","Source","Added"].map((h, i) => (
-                      <th key={h} className={`text-left px-4 py-3 text-xs font-medium ${i > 2 ? "hidden md:table-cell" : ""}`} style={{ color: "#94A3B8" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((lead, idx) => {
-                    const src = SOURCE_STYLES[lead.source] || SOURCE_STYLES["Manual Entry"];
-                    return (
-                      <tr key={lead.id} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)", borderBottom: "0.5px solid hsl(var(--border))" }}>
-                        <td className="px-4 py-3">
-                          <Link to={`/leads/${lead.id}`} className="flex items-center gap-2.5">
-                            <div className="h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-medium" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
-                              {initials(lead.name)}
+          <div className="flex gap-4">
+            <div className="flex-1 surface rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-secondary/30">
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Lead</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Company</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Intent</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hidden md:table-cell">Source</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hidden lg:table-cell">Last activity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((lead) => {
+                      const src = SOURCE_STYLES[lead.source] || SOURCE_STYLES["Manual Entry"];
+                      const isSelected = selectedLead?.id === lead.id;
+                      return (
+                        <tr
+                          key={lead.id}
+                          onClick={() => setSelectedLead(lead)}
+                          className={`border-b border-border last:border-b-0 cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-secondary/40"}`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                                {initials(lead.name)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-medium text-white truncate">{lead.name}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">{lead.email}</p>
+                              </div>
+                              {reminderLeadIds.has(lead.id) && (
+                                <Clock className="h-3 w-3 flex-shrink-0 text-warning" title="Follow-up due" />
+                              )}
                             </div>
-                            <span className="text-xs font-medium text-white hover:underline">{lead.name}</span>
-                            {reminderLeadIds.has(lead.id) && (
-                              <Clock className="h-3 w-3 flex-shrink-0" style={{ color: "#F59E0B" }} title="Follow-up due" />
-                            )}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3 text-xs" style={{ color: "#94A3B8" }}>{lead.company || "—"}</td>
-                        <td className="px-4 py-3 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>{lead.title || "—"}</td>
-                        <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={lead.status} /></td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <IntentScoreBadge score={intentScores[lead.id]} />
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-2 w-2 rounded-full" style={{ background: PRIORITY_DOTS[lead.priority || "Medium"] }} />
-                            <span className="text-xs" style={{ color: "#94A3B8" }}>{lead.priority || "Medium"}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: src.bg, color: src.color }}>
-                            {lead.source || "Manual"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs hidden md:table-cell" style={{ color: "#94A3B8" }}>{moment(lead.created_date).fromNow()}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-4 py-3 text-[13px] text-foreground/90">{lead.company || "—"}</td>
+                          <td className="px-4 py-3"><IntentScoreBadge score={intentScores[lead.id]} /></td>
+                          <td className="px-4 py-3"><StatusBadge status={lead.status} /></td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: src.bg, color: src.color }}>
+                              {lead.source || "Manual"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-[12px] text-muted-foreground hidden lg:table-cell">{lastActivity(lead)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            {selectedLead && (
+              <div className="hidden xl:block w-80 flex-shrink-0">
+                <LeadPreviewPanel lead={selectedLead} intentScore={intentScores[selectedLead.id]} onClose={() => setSelectedLead(null)} />
+              </div>
+            )}
           </div>
         )
       )}
 
       <AddLeadDialog open={showAdd} onClose={() => setShowAdd(false)} onSuccess={loadLeads} />
       <ImportLeadsDialog open={showImport} onClose={() => setShowImport(false)} onSuccess={loadLeads} />
+    </div>
+  );
+}
+
+function LeadPreviewPanel({ lead, intentScore, onClose }) {
+  return (
+    <div className="surface rounded-xl overflow-hidden sticky top-6">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+        <button onClick={onClose} className="h-6 w-6 rounded-md hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="p-4">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 text-[13px] font-semibold bg-primary/10 text-primary border border-primary/20">
+            {lead.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-white truncate">{lead.name}</p>
+            <p className="text-[12px] text-muted-foreground truncate">{lead.title || "—"}</p>
+          </div>
+        </div>
+        <div className="space-y-2.5 mb-4">
+          <PreviewRow icon={Mail} text={lead.email} />
+          {lead.company && <PreviewRow icon={Building} text={lead.company} />}
+          {lead.title && <PreviewRow icon={Briefcase} text={lead.title} />}
+        </div>
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <StatusBadge status={lead.status} />
+          <IntentScoreBadge score={intentScore} />
+        </div>
+        <Link
+          to={`/leads/${lead.id}`}
+          className="inline-flex items-center justify-center gap-1.5 h-9 w-full rounded-lg text-[13px] font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+        >
+          Open detail <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function PreviewRow({ icon: Icon, text }) {
+  return (
+    <div className="flex items-center gap-2 text-[12px] text-foreground/90">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+      <span className="truncate">{text}</span>
     </div>
   );
 }

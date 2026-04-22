@@ -1,26 +1,28 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/lib/WorkspaceContext";
-import IntentScoreBadge from "../components/IntentScoreBadge";
-import { Users, Mail, MessageSquare, Calendar, ArrowRight, Zap, RefreshCw, Loader2, Clock, Sparkles, Telescope, FlaskConical } from "lucide-react";
+import { Users, Mail, MessageSquare, Calendar, Zap, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+
+import DashboardHero from "../components/DashboardHero";
 import StatsCard from "../components/StatsCard";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
 import { SkeletonDashboard } from "../components/SkeletonTable";
 import GettingStartedBanner from "../components/GettingStartedBanner";
-import DashboardHero from "../components/DashboardHero";
+import NextBestAction from "../components/NextBestAction";
+import InboxActivityCard from "../components/InboxActivityCard";
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
 const PIPELINE_STAGES = ["New", "Contacted", "Replied", "Interested", "Meeting Booked", "Closed"];
 const STAGE_COLORS = {
-  "New": "#00E5FF",
-  "Contacted": "#7C4DFF",
-  "Replied": "#00F5A5",
-  "Interested": "#FFB020",
-  "Meeting Booked": "#FF2D92",
-  "Closed": "#FF4D6D",
+  "New":            "#60A5FA",
+  "Contacted":      "#A78BFA",
+  "Replied":        "#34D399",
+  "Interested":     "#FBBF24",
+  "Meeting Booked": "#10B981",
+  "Closed":         "#94A3B8",
 };
 
 function initials(name) {
@@ -39,22 +41,22 @@ export default function Dashboard() {
   const [ingestionLogs, setIngestionLogs] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [reminders, setReminders] = useState([]);
-  const [prospects, setProspects] = useState([]);
+  const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
     if (workspaceLoading || !workspace) return;
-    async function load() {
+    (async () => {
       const user = await base44.auth.me();
       const wf = { workspace_id: workspace.id };
-      const [l, c, e, s, isl, ill, rem, pros] = await Promise.all([
+      const [l, c, e, s, isl, ill, rem, rev] = await Promise.all([
         base44.entities.Lead.filter(wf, "-created_date", 100),
         base44.entities.Campaign.filter(wf, "-created_date", 10),
         base44.entities.EmailLog.filter(wf, "-created_date", 20),
-        base44.entities.IntentScore.filter({ created_by: user.email }, "-intent_score", 20),
+        base44.entities.IntentScore.filter({ created_by: user.email }, "-intent_score", 50),
         base44.entities.EmailIngestionSettings.filter({ created_by: user.email }, "-created_date", 1).catch(() => []),
-        base44.entities.EmailIngestionLog.filter(wf, "-created_date", 5).catch(() => []),
+        base44.entities.EmailIngestionLog.filter(wf, "-created_date", 10).catch(() => []),
         base44.entities.FollowUpReminder.filter({ workspace_id: workspace.id, status: "pending" }, "-due_date", 20).catch(() => []),
-        base44.entities.Prospect.filter(wf, "-opportunity_score", 50).catch(() => []),
+        base44.entities.EmailIngestionLog.filter({ created_by: user.email, result: "pending_review" }, "-created_date", 200).catch(() => []),
       ]);
       setLeads(l);
       setCampaigns(c);
@@ -63,10 +65,9 @@ export default function Dashboard() {
       setIngestionSettings(isl[0] || null);
       setIngestionLogs(ill);
       setReminders(rem);
-      setProspects(pros);
+      setReviewCount(rev.length);
       setLoading(false);
-    }
-    load();
+    })();
   }, [workspace, workspaceLoading]);
 
   if (workspaceLoading || loading) return <SkeletonDashboard />;
@@ -76,9 +77,7 @@ export default function Dashboard() {
   const replied = leads.filter(l => ["Replied", "Interested", "Meeting Booked", "Closed"].includes(l.status)).length;
   const meetings = leads.filter(l => l.status === "Meeting Booked").length;
   const contacted = leads.filter(l => l.status !== "New").length;
-  const recentLeads = leads.slice(0, 7);
-  const activeProspects = prospects.filter(p => p.status === "New" || p.status === "Saved");
-  const topProspects = [...activeProspects].slice(0, 3);
+  const recentLeads = leads.slice(0, 6);
 
   const stageCounts = {};
   PIPELINE_STAGES.forEach(s => { stageCounts[s] = leads.filter(l => l.status === s).length; });
@@ -87,174 +86,129 @@ export default function Dashboard() {
   intentScores.forEach(s => { scoreMap[s.lead_id] = s.intent_score; });
   const highIntentLeads = [...leads]
     .filter(l => (scoreMap[l.id] ?? -1) >= 70)
-    .sort((a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0))
-    .slice(0, 5);
+    .sort((a, b) => (scoreMap[b.id] ?? 0) - (scoreMap[a.id] ?? 0));
+  const highIntentCount = highIntentLeads.length;
+  const replyRatePct = contacted > 0 ? Math.round((replied / contacted) * 100) : 0;
 
-  const isEmpty = totalLeads === 0 && prospects.length === 0;
+  const isEmpty = totalLeads === 0;
+  const setupIncomplete = !(workspace?.gmail_connected && ingestionSettings?.leads_inbox && leads.length > 0);
+  const maxStage = Math.max(1, ...Object.values(stageCounts));
+
+  const handleSync = async () => {
+    if (!ingestionSettings?.leads_inbox) return;
+    setSyncing(true);
+    toast({ title: "Sync started", description: "Checking Gmail for new leads…" });
+    try {
+      const user = await base44.auth.me();
+      const uf = { created_by: user.email };
+      const res = await base44.functions.invoke('gmailSync', {});
+      const stats = res?.data?.stats;
+      const [isl, ill] = await Promise.all([
+        base44.entities.EmailIngestionSettings.filter(uf, '-created_date', 1).catch(() => []),
+        base44.entities.EmailIngestionLog.filter(uf, '-created_date', 10).catch(() => []),
+      ]);
+      setIngestionSettings(isl[0] || null);
+      setIngestionLogs(ill);
+      toast({ title: "Sync complete", description: stats ? `${stats.created} new leads, ${stats.skipped} skipped` : "Sync finished" });
+    } catch (err) {
+      toast({ title: "Sync failed", description: err.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      <DashboardHero
-        userName={workspace?.name}
-        isEmpty={isEmpty}
-        totalLeads={totalLeads}
-        totalSent={totalSent}
-      />
+      <DashboardHero userName={workspace?.name} isEmpty={isEmpty} />
 
-      {!(workspace?.gmail_connected && ingestionSettings?.leads_inbox && leads.length > 0) && (
+      {setupIncomplete && (
         <GettingStartedBanner workspace={workspace} ingestionSettings={ingestionSettings} />
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accentColor="#00E5FF" />
-        <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accentColor="#7C4DFF" />
-        <StatsCard icon={MessageSquare} label="Reply Rate" value={contacted > 0 ? `${Math.round((replied / contacted) * 100)}%` : "0%"} accentColor="#FFB020" />
-        <StatsCard icon={Calendar} label="Meetings Booked" value={meetings} accentColor="#FF2D92" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accent="blue" />
+        <StatsCard icon={Sparkles} label="High Intent" value={highIntentCount} accent="amber" sub="Score 70+" />
+        <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accent="purple" />
+        <StatsCard icon={MessageSquare} label="Reply Rate" value={`${replyRatePct}%`} accent="green" />
+        <StatsCard icon={Calendar} label="Meetings" value={meetings} accent="red" />
       </div>
 
-      {/* Discovery + Pipeline row */}
+      {/* Pipeline */}
+      <div className="surface rounded-xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <p className="text-[13px] font-semibold text-white">Pipeline overview</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Lead distribution across stages</p>
+          </div>
+          <Link to="/leads" className="text-[12px] font-medium text-primary hover:underline">View leads →</Link>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+          {PIPELINE_STAGES.map(stage => {
+            const count = stageCounts[stage];
+            const heightPct = (count / maxStage) * 100;
+            return (
+              <div key={stage} className="flex flex-col gap-2">
+                <span className="text-[22px] font-semibold text-white leading-none tracking-tight">{count}</span>
+                <div className="h-1 w-full bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${heightPct}%`, background: STAGE_COLORS[stage] }}
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground leading-tight">{stage}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Next best action + Inbox activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Pipeline */}
-        <div className="lg:col-span-2 rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <p className="text-xs font-medium text-white font-mono tracking-wider uppercase mb-4">Inbound Pipeline</p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-            {PIPELINE_STAGES.map(stage => (
-              <div key={stage} className="flex flex-col items-center rounded-xl p-3 relative overflow-hidden" style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${STAGE_COLORS[stage]}20` }}>
-                <span className="font-display text-2xl font-bold text-white">{stageCounts[stage]}</span>
-                <span className="text-[10px] mt-1 text-center leading-tight font-mono uppercase tracking-wider" style={{ color: "#94A3B8" }}>{stage}</span>
-                <div className="mt-2 h-0.5 w-full rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${STAGE_COLORS[stage]}, transparent)`, boxShadow: `0 0 8px ${STAGE_COLORS[stage]}80` }} />
-              </div>
-            ))}
-          </div>
+        <div className="lg:col-span-2">
+          <NextBestAction
+            highIntentLeads={highIntentLeads}
+            reminders={reminders}
+            reviewCount={reviewCount}
+            scoreMap={scoreMap}
+          />
         </div>
-
-        {/* Discovery snapshot */}
-        <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Telescope className="h-4 w-4" style={{ color: "#00E5FF" }} />
-              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Prospect Discovery</p>
-            </div>
-            <Link to="/prospect-discovery" className="text-xs" style={{ color: "#00E5FF" }}>View all →</Link>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-              <p className="text-2xl font-bold text-white">{activeProspects.length}</p>
-              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Active</p>
-            </div>
-            <div className="rounded-lg p-3 text-center" style={{ background: "hsl(var(--secondary))" }}>
-              <p className="text-2xl font-bold" style={{ color: "#00F5A5" }}>{prospects.filter(p => p.status === "Converted").length}</p>
-              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Converted</p>
-            </div>
-          </div>
-          {topProspects.length > 0 ? topProspects.map(p => (
-            <Link key={p.id} to="/prospect-discovery" className="flex items-center justify-between py-2 group" style={{ borderTop: "0.5px solid hsl(var(--border))", textDecoration: "none" }}>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-white truncate group-hover:text-blue-400 transition-colors">{p.company_name}</p>
-                <p className="text-xs truncate" style={{ color: "#64748B" }}>{p.industry}</p>
-              </div>
-              <span className="text-xs font-bold ml-2 flex-shrink-0 font-mono" style={{ color: p.opportunity_score >= 75 ? "#00F5A5" : "#FFB020" }}>{p.opportunity_score}</span>
-            </Link>
-          )) : (
-            <div className="text-center py-3">
-              <p className="text-xs" style={{ color: "#64748B" }}>No prospects yet</p>
-              <Link to="/prospect-discovery" className="text-xs" style={{ color: "#00E5FF" }}>Run discovery →</Link>
-            </div>
-          )}
-        </div>
+        <InboxActivityCard
+          ingestionSettings={ingestionSettings}
+          logs={ingestionLogs}
+          syncing={syncing}
+          onSync={handleSync}
+          gmailConnected={!!workspace?.gmail_connected}
+        />
       </div>
 
-      {/* High Intent */}
-      {highIntentLeads.length > 0 && (
-        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <span className="h-2 w-2 rounded-full animate-pulse-glow" style={{ background: "#FFB020", boxShadow: "0 0 8px #FFB020" }} />
-            <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">High Intent Leads</p>
-            <span className="text-xs ml-1" style={{ color: "#64748B" }}>— scored by AI from behavioral + email signals</span>
-            <span className="text-xs ml-auto font-mono" style={{ color: "#94A3B8" }}>Top {highIntentLeads.length} by IQ Score</span>
-          </div>
-          {highIntentLeads.map(lead => (
-            <div key={lead.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-              <div className="flex items-center gap-3 min-w-0">
-                <IntentScoreBadge score={scoreMap[lead.id]} />
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-white truncate">{lead.name}</p>
-                  <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
-                </div>
-              </div>
-              <Link to={`/leads/${lead.id}`} className="text-xs px-3 py-1.5 rounded-lg transition-all flex-shrink-0 font-medium" style={{ background: "linear-gradient(135deg, rgba(255,176,32,0.18), rgba(255,45,146,0.12))", color: "#FFB020", border: "1px solid rgba(255,176,32,0.3)", textDecoration: "none" }}>
-                Generate Email →
-              </Link>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Follow-up Due */}
-      {reminders.length > 0 && (
-        <div className="rounded-xl overflow-hidden mb-5" style={{ background: "hsl(var(--card))", border: "0.5px solid rgba(245,158,11,0.3)" }}>
-          <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <Clock className="h-3.5 w-3.5" style={{ color: "#F59E0B" }} />
-            <p className="text-xs font-medium text-white">Follow-up Due</p>
-            <span className="text-xs ml-auto" style={{ color: "#94A3B8" }}>{reminders.length} lead{reminders.length !== 1 ? 's' : ''}</span>
-          </div>
-          {[...reminders].sort((a, b) => {
-            const order = { stale_interested: 0, no_reply: 1, no_contact: 2 };
-            return (order[a.reminder_type] ?? 3) - (order[b.reminder_type] ?? 3);
-          }).slice(0, 5).map(r => (
-            <div key={r.id} className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{
-                  background: r.reminder_type === 'stale_interested' ? 'rgba(239,68,68,0.15)' : r.reminder_type === 'no_reply' ? 'rgba(245,158,11,0.15)' : 'rgba(148,163,184,0.1)',
-                  color: r.reminder_type === 'stale_interested' ? '#EF4444' : r.reminder_type === 'no_reply' ? '#F59E0B' : '#94A3B8',
-                }}>
-                  {r.reminder_type === 'stale_interested' ? 'Stale' : r.reminder_type === 'no_reply' ? 'No Reply' : 'Not Contacted'}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-white truncate">{r.lead_name}</p>
-                  <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{r.lead_company || ''} · {r.days_since_contact}d ago</p>
-                </div>
-              </div>
-              <Link to={`/leads/${r.lead_id}`} className="text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors flex-shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", textDecoration: "none" }}>
-                <Sparkles className="h-3 w-3" /> Follow-up
-              </Link>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Recent Leads</p>
-            <Link to="/leads" className="flex items-center gap-1 text-xs" style={{ color: "#00E5FF" }}>
-              View all <ArrowRight className="h-3 w-3" />
-            </Link>
+      {/* Recent leads + Campaigns */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 surface rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <p className="text-[13px] font-semibold text-white">Recent leads</p>
+            <Link to="/leads" className="text-[12px] font-medium text-primary hover:underline">View all →</Link>
           </div>
           {recentLeads.length === 0 ? (
-            <EmptyState icon={Users} title="No leads yet" description="Import a CSV or use Email Ingestion">
-              <Link to="/leads" style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: "500", background: "#F59E0B", color: "#000", textDecoration: "none" }}>Import leads</Link>
+            <EmptyState icon={Users} title="No leads yet" description="Connect Gmail or import a CSV to get started" compact>
+              <Link to="/leads" className="inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary/90 text-primary-foreground">Go to Leads</Link>
             </EmptyState>
           ) : (
-            <div>
+            <div className="divide-y divide-border">
               {recentLeads.map(lead => (
-                <Link key={lead.id} to={`/leads/${lead.id}`} className="flex items-center justify-between px-5 py-3 transition-colors" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "hsl(var(--secondary))"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <Link key={lead.id} to={`/leads/${lead.id}`} className="flex items-center justify-between px-5 py-3 hover:bg-secondary/40 transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-mono font-bold" style={{ background: "linear-gradient(135deg, rgba(0,229,255,0.2), rgba(255,45,146,0.1))", color: "#00E5FF", border: "1px solid rgba(0,229,255,0.25)" }}>
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
                       {initials(lead.name)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-white truncate">{lead.name}</p>
-                      <p className="text-xs truncate" style={{ color: "#94A3B8" }}>{lead.company || lead.email}</p>
+                      <p className="text-[13px] font-medium text-white truncate">{lead.name}</p>
+                      <p className="text-[12px] text-muted-foreground truncate">{lead.company || lead.email}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 ml-3">
+                  <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                     <StatusBadge status={lead.status} />
-                    <span className="text-xs hidden sm:block" style={{ color: "#94A3B8" }}>{moment(lead.created_date).fromNow()}</span>
+                    <span className="text-[11px] text-muted-foreground hidden sm:block">{moment(lead.created_date).fromNow(true)}</span>
                   </div>
                 </Link>
               ))}
@@ -262,103 +216,28 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="space-y-4">
-          {/* Gmail Sync widget */}
-          <div className="rounded-xl p-5" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Gmail Capture</p>
-              <button
-                onClick={async () => {
-                  if (!ingestionSettings?.leads_inbox) return;
-                  setSyncing(true);
-                  toast({ title: "Sync started", description: "Checking Gmail for new leads…" });
-                  try {
-                    const user = await base44.auth.me();
-                    const uf = { created_by: user.email };
-                    const res = await base44.functions.invoke('gmailSync', {});
-                    const stats = res?.data?.stats;
-                    const [isl, ill] = await Promise.all([
-                      base44.entities.EmailIngestionSettings.filter(uf, '-created_date', 1).catch(() => []),
-                      base44.entities.EmailIngestionLog.filter(uf, '-created_date', 5).catch(() => []),
-                    ]);
-                    setIngestionSettings(isl[0] || null);
-                    setIngestionLogs(ill);
-                    toast({ title: "Sync complete", description: stats ? `${stats.created} new leads found, ${stats.skipped} skipped` : "Sync finished" });
-                  } catch (err) {
-                    toast({ title: "Sync failed", description: err.message || "Unknown error", variant: "destructive" });
-                  } finally {
-                    setSyncing(false);
-                  }
-                }}
-                disabled={syncing || !ingestionSettings?.leads_inbox}
-                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                style={{ background: "rgba(0,229,255,0.12)", color: "#00E5FF", border: "1px solid rgba(0,229,255,0.25)" }}
-              >
-                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Sync now
-              </button>
-            </div>
-            {ingestionSettings?.leads_inbox ? (
-              <div className="mb-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: "#10B981" }} />
-                  <span className="text-xs truncate" style={{ color: "#10B981" }}>{ingestionSettings.leads_inbox}</span>
-                </div>
-                {ingestionSettings.last_sync_at && (
-                  <p className="text-xs" style={{ color: "#94A3B8" }}>Last sync: {moment(ingestionSettings.last_sync_at).fromNow()}</p>
-                )}
-              </div>
-            ) : (
-              <div className="mb-3">
-                <p className="text-xs" style={{ color: "#94A3B8" }}>Not configured</p>
-                <Link to="/settings?tab=ingestion" className="text-xs" style={{ color: "#00E5FF" }}>Set up Inbox Monitor →</Link>
-              </div>
-            )}
-            {ingestionLogs.length > 0 && (
-              <div className="space-y-1.5 mt-3">
-                {ingestionLogs.map(log => {
-                  const badge = log.result === 'lead_created'
-                    ? { bg: "rgba(16,185,129,0.15)", color: "#10B981", label: "Lead" }
-                    : log.result === 'pending_review'
-                    ? { bg: "rgba(245,158,11,0.15)", color: "#F59E0B", label: "Review" }
-                    : { bg: "rgba(148,163,184,0.1)", color: "#94A3B8", label: "Skip" };
-                  return (
-                    <div key={log.id} className="flex items-center gap-2">
-                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-                      <span className="text-xs truncate" style={{ color: "#94A3B8" }}>{log.sender_name || log.sender_email}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        <div className="surface rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <p className="text-[13px] font-semibold text-white">Active campaigns</p>
+            <Link to="/campaigns" className="text-[12px] font-medium text-primary hover:underline">View all →</Link>
           </div>
-
-          {/* Campaigns widget */}
-          <div className="rounded-xl overflow-hidden" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-              <p className="text-xs font-medium text-white font-mono tracking-wider uppercase">Active Campaigns</p>
-              <Link to="/campaigns" className="text-xs" style={{ color: "#00E5FF" }}>View all</Link>
+          {campaigns.length === 0 ? (
+            <EmptyState icon={Zap} title="No campaigns" description="Build an automated follow-up sequence" compact>
+              <Link to="/campaigns" className="inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-medium bg-primary hover:bg-primary/90 text-primary-foreground">Create campaign</Link>
+            </EmptyState>
+          ) : (
+            <div className="divide-y divide-border">
+              {campaigns.slice(0, 4).map(c => (
+                <Link key={c.id} to="/campaigns" className="block px-5 py-3 hover:bg-secondary/40 transition-colors">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-[13px] font-medium text-white truncate">{c.name}</p>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{c.total_leads || 0} leads · {c.total_sent || 0} sent · {c.total_replied || 0} replies</p>
+                </Link>
+              ))}
             </div>
-            {campaigns.length === 0 ? (
-              <EmptyState icon={Zap} title="No campaigns" description="Create your first campaign">
-                <Link to="/campaigns" style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: "500", background: "#F59E0B", color: "#000", textDecoration: "none" }}>Create Campaign</Link>
-              </EmptyState>
-            ) : (
-              <div>
-                {campaigns.slice(0, 4).map(c => (
-                  <Link key={c.id} to="/campaigns" className="block px-5 py-3 transition-colors" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "hsl(var(--secondary))"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs font-medium text-white truncate">{c.name}</p>
-                      <StatusBadge status={c.status} />
-                    </div>
-                    <p className="text-xs" style={{ color: "#94A3B8" }}>{c.total_leads || 0} leads · {c.total_sent || 0} sent</p>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

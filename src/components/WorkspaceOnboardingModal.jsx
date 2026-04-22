@@ -148,11 +148,13 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
       <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xl font-bold text-white">Beacon</span>
-            <span className="text-xl font-bold text-amber-400">IQ</span>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-primary/15 border border-primary/25">
+              <Sparkles className="h-4 w-4 text-primary" strokeWidth={2.5} />
+            </div>
+            <span className="text-[18px] font-semibold tracking-tight text-white">BeaconIQ</span>
           </div>
-          <p className="text-sm text-muted-foreground">Let's set up your workspace in just a few steps.</p>
+          <p className="text-[13px] text-muted-foreground">Let's set up your workspace in just a few steps.</p>
         </div>
 
         {/* Step indicators */}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Briefcase, Inbox, Clock, FlaskConical, Settings as SettingsIcon } from "lucide-react";
 import EmailIngestionTab from "../components/EmailIngestionTab";
 import WorkspaceSettingsTab from "../components/WorkspaceSettingsTab";
 import PageHeader from "../components/PageHeader";
@@ -9,20 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import DemoDataPanel from "@/components/DemoDataPanel";
+
+const TABS = [
+  { id: "profile",   label: "Business Profile", icon: Briefcase, desc: "Tell BeaconIQ about your business so AI can write on-brand outreach." },
+  { id: "workspace", label: "Workspace",        icon: SettingsIcon, desc: "Gmail connection and workspace-level settings." },
+  { id: "ingestion", label: "Email Setup",      icon: Inbox, desc: "Configure which inbox BeaconIQ watches for inbound leads." },
+  { id: "followup",  label: "Follow-up Rules",  icon: Clock, desc: "Auto-remind yourself when leads go cold." },
+  { id: "demo",      label: "Demo & Testing",   icon: FlaskConical, desc: "Load realistic sample data to explore every feature end-to-end." },
+];
 
 export default function Settings() {
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
-    business_name: "",
-    description: "",
-    industry: "",
-    target_audience: "",
-    products_services: "",
-    tone: "",
-    sales_goal: "",
-    website: "",
+    business_name: "", description: "", industry: "", target_audience: "",
+    products_services: "", tone: "", sales_goal: "", website: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,31 +36,32 @@ export default function Settings() {
 
   useEffect(() => {
     base44.auth.me().then(async user => {
-    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-    const workspaceId = workspaces[0]?.id;
-    const profileFilter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
-    base44.entities.BusinessProfile.filter(profileFilter, "-created_date", 1).then(data => {
-      if (data.length > 0) {
-        setProfile(data[0]);
-        setForm({
-          business_name: data[0].business_name || "",
-          description: data[0].description || "",
-          industry: data[0].industry || "",
-          target_audience: data[0].target_audience || "",
-          products_services: data[0].products_services || "",
-          tone: data[0].tone || "",
-          sales_goal: data[0].sales_goal || "",
-          website: data[0].website || "",
-        });
-        setFollowupForm({
-          followup_enabled: data[0].followup_enabled !== false,
-          no_contact_days: data[0].no_contact_days ?? 3,
-          no_reply_days: data[0].no_reply_days ?? 5,
-          stale_interested_days: data[0].stale_interested_days ?? 7,
-        });
-      }
-      setLoading(false);
-    }); });
+      const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
+      const workspaceId = workspaces[0]?.id;
+      const profileFilter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
+      base44.entities.BusinessProfile.filter(profileFilter, "-created_date", 1).then(data => {
+        if (data.length > 0) {
+          setProfile(data[0]);
+          setForm({
+            business_name: data[0].business_name || "",
+            description: data[0].description || "",
+            industry: data[0].industry || "",
+            target_audience: data[0].target_audience || "",
+            products_services: data[0].products_services || "",
+            tone: data[0].tone || "",
+            sales_goal: data[0].sales_goal || "",
+            website: data[0].website || "",
+          });
+          setFollowupForm({
+            followup_enabled: data[0].followup_enabled !== false,
+            no_contact_days: data[0].no_contact_days ?? 3,
+            no_reply_days: data[0].no_reply_days ?? 5,
+            stale_interested_days: data[0].stale_interested_days ?? 7,
+          });
+        }
+        setLoading(false);
+      });
+    });
   }, []);
 
   const handleSave = async () => {
@@ -71,192 +75,176 @@ export default function Settings() {
       const created = await base44.entities.BusinessProfile.create({ ...form, workspace_id: workspaceId, onboarding_complete: true });
       setProfile(created);
     }
-    toast({ title: "Business profile saved!" });
+    toast({ title: "Business profile saved" });
     setSaving(false);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
+  const currentTab = TABS.find(t => t.id === activeTab) || TABS[0];
+
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto">
+    <div className="p-6 lg:p-8 max-w-5xl mx-auto">
       <PageHeader title="Settings" description="Configure BeaconIQ for your business" />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-border flex-wrap">
-        {[['profile','Business Profile'],['workspace','Workspace'],['ingestion','Email Ingestion'],['followup','Follow-up Reminders'],['demo','Demo & Testing']].map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className="px-4 py-2.5 text-sm font-medium transition-colors"
-            style={{
-              color: activeTab === id ? '#3B82F6' : '#94A3B8',
-              borderBottom: activeTab === id ? '2px solid #3B82F6' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
-          >{label}</button>
-        ))}
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+        <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors whitespace-nowrap text-left ${
+                activeTab === tab.id
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "text-muted-foreground hover:text-white hover:bg-secondary border border-transparent"
+              }`}
+            >
+              <tab.icon className="h-4 w-4 flex-shrink-0" />
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
-      {activeTab === 'profile' && (
-        <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Business Name *</Label>
-              <Input value={form.business_name} onChange={e => setForm({...form, business_name: e.target.value})} placeholder="Acme Agency" />
-            </div>
-            <div>
-              <Label>Industry *</Label>
-              <Select value={form.industry} onValueChange={v => setForm({...form, industry: v})}>
-                <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
-                <SelectContent>
-                  {["Marketing Agency", "Lead Generation", "SaaS", "Consulting", "E-commerce", "Real Estate", "Financial Services", "Other"].map(i => (
-                    <SelectItem key={i} value={i}>{i}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="min-w-0">
+          <div className="mb-5">
+            <h2 className="text-[16px] font-semibold text-white">{currentTab.label}</h2>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{currentTab.desc}</p>
           </div>
 
-          <div>
-            <Label>Business Description *</Label>
-            <Textarea
-              value={form.description}
-              onChange={e => setForm({...form, description: e.target.value})}
-              placeholder="Describe what your business does, who you serve, and what makes you unique..."
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <Label>Target Audience *</Label>
-            <Textarea
-              value={form.target_audience}
-              onChange={e => setForm({...form, target_audience: e.target.value})}
-              placeholder="E.g., B2B SaaS founders, e-commerce brands doing $1M+ revenue..."
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <Label>Products / Services</Label>
-            <Textarea
-              value={form.products_services}
-              onChange={e => setForm({...form, products_services: e.target.value})}
-              placeholder="List your main offerings..."
-              rows={2}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Communication Tone *</Label>
-              <Select value={form.tone} onValueChange={v => setForm({...form, tone: v})}>
-                <SelectTrigger><SelectValue placeholder="Select tone" /></SelectTrigger>
-                <SelectContent>
-                  {["Professional", "Friendly", "Casual", "Formal", "Persuasive"].map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Primary Sales Goal *</Label>
-              <Select value={form.sales_goal} onValueChange={v => setForm({...form, sales_goal: v})}>
-                <SelectTrigger><SelectValue placeholder="Select goal" /></SelectTrigger>
-                <SelectContent>
-                  {["Book a Meeting", "Schedule a Demo", "Close a Deal", "Get a Response", "Drive Traffic"].map(g => (
-                    <SelectItem key={g} value={g}>{g}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <Label>Website URL</Label>
-            <Input value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="https://yourcompany.com" />
-          </div>
-
-          <div className="pt-2">
-            <Button onClick={handleSave} disabled={saving} className="gap-2">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'workspace' && <WorkspaceSettingsTab />}
-      {activeTab === 'demo' && (
-        <div className="space-y-4">
-          <p className="text-sm" style={{ color: "#94A3B8" }}>Load a realistic sample workspace to explore every feature of BeaconIQ without needing real data or external integrations.</p>
-          <DemoDataPanel />
-        </div>
-      )}
-
-      {activeTab === 'ingestion' && <EmailIngestionTab />}
-
-      {activeTab === 'followup' && (
-        <div className="bg-card rounded-2xl border border-border p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">Enable follow-up reminders</p>
-              <p className="text-xs mt-0.5" style={{ color: "#94A3B8" }}>Automatically remind you when leads go cold</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={followupForm.followup_enabled}
-              onChange={e => setFollowupForm({ ...followupForm, followup_enabled: e.target.checked })}
-              className="h-4 w-4 accent-blue-500"
-            />
-          </div>
-          {followupForm.followup_enabled && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <Label>No-contact threshold (days)</Label>
-                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.no_contact_days}
-                    onChange={e => setFollowupForm({ ...followupForm, no_contact_days: parseInt(e.target.value) || 3 })} />
-                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Lead in "New" with no email sent</p>
-                </div>
-                <div>
-                  <Label>No-reply threshold (days)</Label>
-                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.no_reply_days}
-                    onChange={e => setFollowupForm({ ...followupForm, no_reply_days: parseInt(e.target.value) || 5 })} />
-                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Email sent but lead still "Contacted"</p>
-                </div>
-                <div>
-                  <Label>Stale interested threshold (days)</Label>
-                  <Input type="number" min={1} max={30} className="mt-1" value={followupForm.stale_interested_days}
-                    onChange={e => setFollowupForm({ ...followupForm, stale_interested_days: parseInt(e.target.value) || 7 })} />
-                  <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>Lead is "Interested" with no activity</p>
-                </div>
+          {activeTab === 'profile' && (
+            <div className="surface rounded-xl p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Business Name" required>
+                  <Input value={form.business_name} onChange={e => setForm({ ...form, business_name: e.target.value })} placeholder="Acme Agency" />
+                </Field>
+                <Field label="Industry" required>
+                  <Select value={form.industry} onValueChange={v => setForm({ ...form, industry: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
+                    <SelectContent>
+                      {["Marketing Agency", "Lead Generation", "SaaS", "Consulting", "E-commerce", "Real Estate", "Financial Services", "Other"].map(i => (
+                        <SelectItem key={i} value={i}>{i}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
               </div>
-            </>
+              <Field label="Business Description" required hint="Used by AI to write personalized outreach">
+                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Describe what your business does, who you serve, and what makes you unique…" rows={3} />
+              </Field>
+              <Field label="Target Audience" required>
+                <Textarea value={form.target_audience} onChange={e => setForm({ ...form, target_audience: e.target.value })} placeholder="E.g., B2B SaaS founders, e-commerce brands doing $1M+ revenue…" rows={2} />
+              </Field>
+              <Field label="Products / Services">
+                <Textarea value={form.products_services} onChange={e => setForm({ ...form, products_services: e.target.value })} placeholder="List your main offerings…" rows={2} />
+              </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Communication Tone" required>
+                  <Select value={form.tone} onValueChange={v => setForm({ ...form, tone: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select tone" /></SelectTrigger>
+                    <SelectContent>
+                      {["Professional", "Friendly", "Casual", "Formal", "Persuasive"].map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Primary Sales Goal" required>
+                  <Select value={form.sales_goal} onValueChange={v => setForm({ ...form, sales_goal: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select goal" /></SelectTrigger>
+                    <SelectContent>
+                      {["Book a Meeting", "Schedule a Demo", "Close a Deal", "Get a Response", "Drive Traffic"].map(g => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Website URL">
+                <Input value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} placeholder="https://yourcompany.com" />
+              </Field>
+              <div className="pt-2">
+                <Button onClick={handleSave} disabled={saving} className="gap-1.5 h-9 text-[13px]">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? "Saving…" : "Save profile"}
+                </Button>
+              </div>
+            </div>
           )}
-          <Button
-            onClick={async () => {
-              setSavingFollowup(true);
-              if (profile) {
-                await base44.entities.BusinessProfile.update(profile.id, followupForm);
-              }
-              toast({ title: "Follow-up settings saved!" });
-              setSavingFollowup(false);
-            }}
-            disabled={savingFollowup}
-            className="gap-2"
-          >
-            {savingFollowup && <Loader2 className="h-4 w-4 animate-spin" />}
-            {savingFollowup ? "Saving..." : "Save Settings"}
-          </Button>
+
+          {activeTab === 'workspace' && <WorkspaceSettingsTab />}
+          {activeTab === 'ingestion' && <EmailIngestionTab />}
+          {activeTab === 'demo' && <DemoDataPanel />}
+
+          {activeTab === 'followup' && (
+            <div className="surface rounded-xl p-6 space-y-5">
+              <div className="flex items-center justify-between pb-5 border-b border-border">
+                <div>
+                  <p className="text-[14px] font-medium text-white">Enable follow-up reminders</p>
+                  <p className="text-[12px] mt-0.5 text-muted-foreground">Automatically notify you when leads go cold</p>
+                </div>
+                <Switch
+                  checked={followupForm.followup_enabled}
+                  onCheckedChange={v => setFollowupForm({ ...followupForm, followup_enabled: v })}
+                />
+              </div>
+              {followupForm.followup_enabled && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="No-contact threshold" hint='Lead in "New" with no email sent'>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" min={1} max={30} value={followupForm.no_contact_days} onChange={e => setFollowupForm({ ...followupForm, no_contact_days: parseInt(e.target.value) || 3 })} />
+                      <span className="text-[12px] text-muted-foreground">days</span>
+                    </div>
+                  </Field>
+                  <Field label="No-reply threshold" hint='Email sent but lead still "Contacted"'>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" min={1} max={30} value={followupForm.no_reply_days} onChange={e => setFollowupForm({ ...followupForm, no_reply_days: parseInt(e.target.value) || 5 })} />
+                      <span className="text-[12px] text-muted-foreground">days</span>
+                    </div>
+                  </Field>
+                  <Field label="Stale interested" hint='Lead is "Interested" with no activity'>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" min={1} max={30} value={followupForm.stale_interested_days} onChange={e => setFollowupForm({ ...followupForm, stale_interested_days: parseInt(e.target.value) || 7 })} />
+                      <span className="text-[12px] text-muted-foreground">days</span>
+                    </div>
+                  </Field>
+                </div>
+              )}
+              <Button
+                onClick={async () => {
+                  setSavingFollowup(true);
+                  if (profile) await base44.entities.BusinessProfile.update(profile.id, followupForm);
+                  toast({ title: "Follow-up settings saved" });
+                  setSavingFollowup(false);
+                }}
+                disabled={savingFollowup}
+                className="gap-1.5 h-9 text-[13px]"
+              >
+                {savingFollowup && <Loader2 className="h-4 w-4 animate-spin" />}
+                {savingFollowup ? "Saving…" : "Save settings"}
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, required, hint, children }) {
+  return (
+    <div>
+      <Label className="flex items-center gap-1 text-[12px] font-medium text-foreground/90">
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </Label>
+      <div className="mt-1.5">{children}</div>
+      {hint && <p className="text-[11px] mt-1 text-muted-foreground">{hint}</p>}
     </div>
   );
 }

@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import IntentScoreCard from "../components/IntentScoreCard";
-import { ArrowLeft, Mail, Phone, Building, Briefcase, Trash2, Sparkles, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building, Briefcase, Trash2, Sparkles, AlertTriangle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusBadge from "../components/StatusBadge";
+import EmptyState from "../components/EmptyState";
 import GenerateEmailDialog from "../components/GenerateEmailDialog";
 import { toast } from "@/components/ui/use-toast";
 import moment from "moment";
@@ -53,127 +54,173 @@ export default function LeadDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!lead) {
     return (
-      <div className="p-6 lg:p-8 max-w-4xl mx-auto text-center py-20">
-        <p className="text-muted-foreground mb-4">Lead not found</p>
-        <Link to="/leads" style={{ display: "inline-flex", alignItems: "center", padding: "0 12px", height: "36px", borderRadius: "6px", fontSize: "14px", fontWeight: "500", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))", textDecoration: "none", background: "transparent" }}>Back to Leads</Link>
+      <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+        <EmptyState icon={Mail} title="Lead not found" description="This lead may have been deleted or doesn't belong to your workspace.">
+          <Link to="/leads" className="inline-flex items-center h-9 px-4 rounded-lg text-[13px] font-medium bg-primary hover:bg-primary/90 text-primary-foreground">
+            Back to leads
+          </Link>
+        </EmptyState>
       </div>
     );
   }
 
+  const sortedEmails = [...emails].sort((a, b) => new Date(b.sent_at || b.created_date) - new Date(a.sent_at || a.created_date));
+
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <Link to="/leads" className="inline-flex items-center gap-2 text-xs mb-6 transition-colors" style={{ color: "#94A3B8" }}>
-        <ArrowLeft className="h-4 w-4" /> Back to Leads
+      <Link to="/leads" className="inline-flex items-center gap-1.5 text-[12px] mb-5 text-muted-foreground hover:text-white transition-colors">
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to leads
       </Link>
 
       {activeReminder && (
-        <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-4 flex-wrap" style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }}>
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: "#F59E0B" }} />
-            <p className="text-sm" style={{ color: "#F59E0B" }}>
-              This lead hasn't been contacted in {activeReminder.days_since_contact} days.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowGenerate(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#F59E0B", color: "#000" }}>Generate follow-up?</button>
-            <button
-              onClick={async () => {
-                await base44.entities.FollowUpReminder.update(activeReminder.id, { status: "dismissed", dismiss_reason: "manually dismissed" });
-                setActiveReminder(null);
-              }}
-              className="text-xs px-3 py-1.5 rounded-lg"
-              style={{ color: "#94A3B8", background: "rgba(148,163,184,0.1)" }}
-            >Dismiss</button>
+        <div className="surface rounded-xl p-4 mb-5 border-warning/30 bg-warning/5" style={{ borderColor: "rgba(245,158,11,0.3)" }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-warning" />
+              <div>
+                <p className="text-[13px] font-medium text-warning">Follow-up needed</p>
+                <p className="text-[12px] text-muted-foreground">
+                  This lead hasn't been contacted in {activeReminder.days_since_contact} days.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowGenerate(true)} className="h-8 text-[12px] gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" /> Write follow-up
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  await base44.entities.FollowUpReminder.update(activeReminder.id, { status: "dismissed", dismiss_reason: "manually dismissed" });
+                  setActiveReminder(null);
+                }}
+                className="h-8 text-[12px]"
+              >Dismiss</Button>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl p-6 mb-6" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-medium" style={{ background: "rgba(59,130,246,0.15)", color: "#3B82F6" }}>
+      {/* Hero card */}
+      <div className="surface-elevated rounded-2xl p-6 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="h-14 w-14 rounded-xl flex items-center justify-center flex-shrink-0 text-[16px] font-semibold bg-primary/10 text-primary border border-primary/20">
               {lead.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
-            <div>
-              <h1 className="font-medium text-white" style={{ fontSize: "18px" }}>{lead.name}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: "#94A3B8" }}>
-                <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {lead.email}</span>
-                {lead.company && <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" /> {lead.company}</span>}
-                {lead.title && <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {lead.title}</span>}
-                {lead.phone && <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {lead.phone}</span>}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <h1 className="text-[20px] font-semibold text-white truncate">{lead.name}</h1>
+                <StatusBadge status={lead.status} />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+                <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {lead.email}</span>
+                {lead.company && <span className="flex items-center gap-1.5"><Building className="h-3.5 w-3.5" /> {lead.company}</span>}
+                {lead.title && <span className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> {lead.title}</span>}
+                {lead.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> {lead.phone}</span>}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2 text-xs h-8" onClick={() => setShowGenerate(true)}>
-              <Sparkles className="h-3.5 w-3.5" /> Generate Email
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button onClick={() => setShowGenerate(true)} className="gap-1.5 h-9 text-[13px] font-semibold">
+              <Sparkles className="h-4 w-4" /> Generate Email
             </Button>
-            <Button variant="ghost" size="icon" onClick={deleteLead} className="h-8 w-8" style={{ color: "#EF4444" }}>
+            <Button variant="ghost" size="icon" onClick={deleteLead} className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-4 mt-5 pt-5" style={{ borderTop: "0.5px solid hsl(var(--border))" }}>
-          <div>
-            <p className="text-xs mb-1" style={{ color: "#94A3B8" }}>Status</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 border-t border-border">
+          <MetaField label="Status">
             <Select value={lead.status} onValueChange={updateStatus}>
-              <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 text-[12px] w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {["New","Contacted","Replied","Interested","Meeting Booked","Closed","Unresponsive","Opted Out"].map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <p className="text-xs mb-1" style={{ color: "#94A3B8" }}>Priority</p>
+          </MetaField>
+          <MetaField label="Priority">
             <StatusBadge status={lead.priority || "Medium"} />
-          </div>
-          <div>
-            <p className="text-xs mb-1" style={{ color: "#94A3B8" }}>Source</p>
-            <p className="text-xs text-white">{lead.source || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs mb-1" style={{ color: "#94A3B8" }}>Emails Sent</p>
-            <p className="text-xs text-white">{lead.total_emails_sent || 0}</p>
-          </div>
+          </MetaField>
+          <MetaField label="Source">
+            <span className="text-[13px] text-white">{lead.source || "—"}</span>
+          </MetaField>
+          <MetaField label="Emails sent">
+            <span className="text-[13px] text-white">{lead.total_emails_sent || 0}</span>
+          </MetaField>
         </div>
       </div>
 
+      {/* AI reasoning */}
       <IntentScoreCard lead={lead} intentScore={intentScore} onRescore={loadData} />
 
-      <GenerateEmailDialog open={showGenerate} lead={lead} onClose={() => { setShowGenerate(false); loadData(); }} onSuccess={loadData} />
+      <GenerateEmailDialog open={showGenerate} lead={lead} intentScore={intentScore} onClose={() => { setShowGenerate(false); loadData(); }} onSuccess={loadData} />
 
-      {emails.length > 0 && (
-        <div className="rounded-xl overflow-hidden mt-6" style={{ background: "hsl(var(--card))", border: "0.5px solid hsl(var(--border))" }}>
-          <div className="px-5 py-4" style={{ borderBottom: "0.5px solid hsl(var(--border))" }}>
-            <p className="text-xs font-medium text-white">Email History ({emails.length})</p>
+      {/* Email history */}
+      <div className="surface rounded-xl overflow-hidden mt-5">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <p className="text-[13px] font-semibold text-white">Email history</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{sortedEmails.length} message{sortedEmails.length !== 1 ? 's' : ''}</p>
           </div>
-          {emails.map((email, idx) => (
-            <div key={email.id} className="px-5 py-3" style={{ borderBottom: idx < emails.length - 1 ? "0.5px solid hsl(var(--border))" : "none" }}>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-medium text-white truncate flex-1">{email.subject}</p>
-                <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                  <StatusBadge status={email.status} />
-                  <span className="text-xs" style={{ color: "#94A3B8" }}>{moment(email.sent_at || email.created_date).fromNow()}</span>
-                </div>
-              </div>
-              {email.body && (
-                <p className="text-xs line-clamp-2" style={{ color: "#94A3B8" }}
-                  dangerouslySetInnerHTML={{ __html: email.body.replace(/<[^>]+>/g, " ").slice(0, 200) }}
-                />
-              )}
-            </div>
-          ))}
+          <Button onClick={() => setShowGenerate(true)} variant="outline" className="h-8 text-[12px] gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" /> New email
+          </Button>
         </div>
-      )}
+        {sortedEmails.length === 0 ? (
+          <EmptyState
+            icon={Mail}
+            title="No emails yet"
+            description="Generate your first AI-personalized email to this lead"
+            compact
+          >
+            <Button onClick={() => setShowGenerate(true)} className="h-8 text-[12px] gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" /> Generate email
+            </Button>
+          </EmptyState>
+        ) : (
+          <div className="divide-y divide-border">
+            {sortedEmails.map((email) => (
+              <div key={email.id} className="px-5 py-4">
+                <div className="flex items-start justify-between gap-3 mb-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-white truncate">{email.subject}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />
+                      {moment(email.sent_at || email.created_date).format("MMM D, h:mm A")} · {moment(email.sent_at || email.created_date).fromNow()}
+                    </p>
+                  </div>
+                  <StatusBadge status={email.status} />
+                </div>
+                {email.body && (
+                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-3 mt-2">
+                    {email.body.replace(/<[^>]+>/g, " ").slice(0, 280)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetaField({ label, children }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide font-medium text-muted-foreground mb-1.5">{label}</p>
+      {children}
     </div>
   );
 }
