@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { Menu } from "lucide-react";
 import WorkspaceOnboardingModal from "./WorkspaceOnboardingModal";
 import { useWorkspace } from "@/lib/WorkspaceContext";
+import BrandMark from "./BrandMark";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -65,7 +66,12 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-muted">
             <Menu className="h-5 w-5 text-foreground" />
           </button>
-          <span className="ml-3 font-semibold text-[15px] tracking-tight text-white">BeaconIQ</span>
+          <div className="ml-3 flex items-center gap-2">
+            <BrandMark size={24} />
+            <span className="font-semibold text-[15px] tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>
+              BeaconIQ
+            </span>
+          </div>
         </div>
         
         <main className="flex-1 overflow-y-auto">

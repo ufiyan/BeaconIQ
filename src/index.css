@@ -36,6 +36,10 @@
     --success: 160 84% 39%;
     --warning: 38 92% 55%;
 
+    /* Brand accent — restrained warm gold, used sparingly */
+    --brand-gold: 39 89% 62%;            /* #F5B544 */
+    --brand-navy: 222 45% 12%;           /* deep navy for brand surfaces */
+
     --border: 222 18% 18%;
     --input: 222 18% 18%;
     --ring: 217 91% 60%;
@@ -80,8 +84,11 @@
   }
   .text-success { color: hsl(var(--success)); }
   .text-warning { color: hsl(var(--warning)); }
+  .text-gold { color: hsl(var(--brand-gold)); }
   .bg-success { background-color: hsl(var(--success)); }
   .bg-warning { background-color: hsl(var(--warning)); }
+  .bg-gold { background-color: hsl(var(--brand-gold)); }
   .border-success { border-color: hsl(var(--success)); }
   .border-warning { border-color: hsl(var(--warning)); }
+  .border-gold { border-color: hsl(var(--brand-gold)); }
 }

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function HeroSection({ onGetStarted, onSignIn, isAuthenticated }) {
   return (
@@ -14,7 +14,7 @@ export default function HeroSection({ onGetStarted, onSignIn, isAuthenticated })
       />
       <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-20 lg:pt-32 lg:pb-28 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 mb-6">
-          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          <span className="h-1.5 w-1.5 rounded-full bg-gold" />
           <span className="text-[12px] text-muted-foreground tracking-wide">
             AI-native inbound lead intelligence
           </span>

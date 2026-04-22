@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Waves } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 
 export default function MarketingNav({ onSignIn, onGetStarted, isAuthenticated }) {
   const links = [
@@ -11,12 +11,12 @@ export default function MarketingNav({ onSignIn, onGetStarted, isAuthenticated }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <a href="#top" className="flex items-center gap-2 group">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Waves className="h-4 w-4 text-white" />
-          </div>
-          <span className="font-semibold text-[15px] tracking-tight text-white">BeaconIQ</span>
+      <div className="max-w-6xl mx-auto px-6 h-[68px] flex items-center justify-between">
+        <a href="#top" className="flex items-center gap-2.5 group">
+          <BrandMark size={32} />
+          <span className="font-semibold text-[15px] tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>
+            BeaconIQ
+          </span>
         </a>
 
         <nav className="hidden md:flex items-center gap-7">

@@ -1,15 +1,15 @@
-import { Waves } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 
 export default function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-border bg-card/30">
       <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-md bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Waves className="h-3.5 w-3.5 text-white" />
-          </div>
-          <span className="font-semibold text-[13px] text-white tracking-tight">BeaconIQ</span>
+        <div className="flex items-center gap-2.5">
+          <BrandMark size={26} />
+          <span className="font-semibold text-[13px] text-white tracking-tight" style={{ letterSpacing: "-0.01em" }}>
+            BeaconIQ
+          </span>
           <span className="text-[12px] text-muted-foreground ml-2">
             Inbound lead intelligence for B2B teams.
           </span>

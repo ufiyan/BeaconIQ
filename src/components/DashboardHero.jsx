@@ -10,15 +10,15 @@ export default function DashboardHero({ userName, isEmpty }) {
 
   return (
     <div className="relative mb-7 rounded-2xl overflow-hidden surface-elevated">
-      {/* subtle gradient wash */}
+      {/* subtle brand gradient wash — navy → blue with a hint of gold */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-60"
+        className="absolute inset-0 pointer-events-none opacity-70"
         style={{
           background:
-            "radial-gradient(ellipse 600px 200px at 0% 0%, rgba(59,130,246,0.08), transparent 70%), radial-gradient(ellipse 500px 180px at 100% 100%, rgba(139,92,246,0.06), transparent 70%)",
+            "radial-gradient(ellipse 620px 220px at 0% 0%, rgba(59,130,246,0.10), transparent 70%), radial-gradient(ellipse 420px 160px at 100% 100%, rgba(245,181,68,0.05), transparent 70%)",
         }}
       />
-      <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 px-6 py-5">
+      <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 px-6 py-6">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
             {moment().format("dddd, MMMM D")}
