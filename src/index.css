@@ -69,6 +69,27 @@
   body {
     @apply bg-background text-foreground font-inter antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overscroll-behavior: none;
+  }
+
+  /* Prevent accidental text selection on interactive elements (mobile tap feel) */
+  button,
+  [role="button"],
+  [role="tab"],
+  a[href],
+  svg.lucide {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Keep text selectable inside inputs/textareas/content */
+  input,
+  textarea,
+  [contenteditable="true"],
+  .select-text {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 

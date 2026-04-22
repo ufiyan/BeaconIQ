@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/use-toast";
 import DemoDataPanel from "@/components/DemoDataPanel";
+import DeleteAccountSection from "@/components/DeleteAccountSection";
+import { AlertTriangle } from "lucide-react";
 
 const TABS = [
   { id: "profile",   label: "Business Profile", icon: Briefcase, desc: "Tell BeaconIQ about your business so AI can write on-brand outreach." },
@@ -19,6 +21,7 @@ const TABS = [
   { id: "ingestion", label: "Email Setup",      icon: Inbox, desc: "Configure which inbox BeaconIQ watches for inbound leads." },
   { id: "followup",  label: "Follow-up Rules",  icon: Clock, desc: "Auto-remind yourself when leads go cold." },
   { id: "demo",      label: "Demo & Testing",   icon: FlaskConical, desc: "Load sample data and work through the launch QA checklist before go-live." },
+  { id: "account",   label: "Account",          icon: AlertTriangle, desc: "Manage your account and account deletion." },
 ];
 
 export default function Settings() {
@@ -180,6 +183,7 @@ export default function Settings() {
           {activeTab === 'workspace' && <WorkspaceSettingsTab />}
           {activeTab === 'ingestion' && <EmailIngestionTab />}
           {activeTab === 'demo' && <DemoDataPanel />}
+          {activeTab === 'account' && <DeleteAccountSection />}
 
           {activeTab === 'followup' && (
             <div className="surface rounded-xl p-6 space-y-5">
