@@ -1,16 +1,13 @@
-import BrandMark from "@/components/BrandMark";
+import BrandLockup from "@/components/BrandLockup";
 
 export default function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-border bg-card/30">
       <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <BrandMark size={26} />
-          <span className="font-semibold text-[13px] text-white tracking-tight" style={{ letterSpacing: "-0.01em" }}>
-            BeaconIQ
-          </span>
-          <span className="text-[12px] text-muted-foreground ml-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <BrandLockup size={24} />
+          <span className="text-[12px] text-muted-foreground">
             Inbound lead intelligence for B2B teams.
           </span>
         </div>

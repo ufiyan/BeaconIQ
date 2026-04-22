@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Inbox, GitPullRequest, FileText, FlaskConical } from "lucide-react";
-import BrandMark from "./BrandMark";
+import BrandLockup from "./BrandLockup";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useState, useEffect } from "react";
@@ -46,12 +46,9 @@ export default function Sidebar({ onClose }) {
   return (
     <div className="h-full flex flex-col bg-sidebar border-r border-sidebar-border">
       {/* Brand lockup */}
-      <div className="h-[60px] flex items-center justify-between px-5 border-b border-sidebar-border">
-        <Link to="/app" className="flex items-center gap-2.5 group">
-          <BrandMark size={30} />
-          <span className="text-[15px] font-semibold tracking-tight text-white" style={{ letterSpacing: "-0.01em" }}>
-            BeaconIQ
-          </span>
+      <div className="h-[64px] flex items-center justify-between px-5 border-b border-sidebar-border">
+        <Link to="/app" className="group -ml-0.5 transition-opacity hover:opacity-90" aria-label="BeaconIQ">
+          <BrandLockup size={28} />
         </Link>
         <button onClick={onClose} className="lg:hidden h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-secondary">
           <X className="h-4 w-4" />
