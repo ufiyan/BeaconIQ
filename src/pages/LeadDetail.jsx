@@ -109,15 +109,22 @@ export default function LeadDetail() {
       )}
 
       {/* Hero card */}
-      <div className="surface-elevated rounded-2xl p-6 mb-5">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+      <div className="relative surface-elevated rounded-2xl p-6 mb-5 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-70"
+          style={{
+            background:
+              "radial-gradient(ellipse 500px 180px at 100% 0%, rgba(139,92,246,0.08), transparent 70%)",
+          }}
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
           <div className="flex items-start gap-4 min-w-0">
             <div className="h-14 w-14 rounded-xl flex items-center justify-center flex-shrink-0 text-[16px] font-semibold bg-primary/10 text-primary border border-primary/20">
               {lead.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h1 className="text-[20px] font-semibold text-white truncate">{lead.name}</h1>
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <h1 className="text-[22px] font-semibold tracking-tight text-white truncate">{lead.name}</h1>
                 <StatusBadge status={lead.status} />
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
@@ -129,7 +136,10 @@ export default function LeadDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Button onClick={() => setShowGenerate(true)} className="gap-1.5 h-9 text-[13px] font-semibold">
+            <Button
+              onClick={() => setShowGenerate(true)}
+              className="gap-1.5 h-10 px-4 text-[13px] font-semibold bg-accent hover:bg-accent/90 text-accent-foreground"
+            >
               <Sparkles className="h-4 w-4" /> Generate Email
             </Button>
             <Button variant="ghost" size="icon" onClick={deleteLead} className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -138,7 +148,7 @@ export default function LeadDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 border-t border-border">
+        <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 border-t border-border">
           <MetaField label="Status">
             <Select value={lead.status} onValueChange={updateStatus}>
               <SelectTrigger className="h-8 text-[12px] w-full"><SelectValue /></SelectTrigger>
@@ -173,7 +183,7 @@ export default function LeadDetail() {
             <p className="text-[13px] font-semibold text-white">Email history</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">{sortedEmails.length} message{sortedEmails.length !== 1 ? 's' : ''}</p>
           </div>
-          <Button onClick={() => setShowGenerate(true)} variant="outline" className="h-8 text-[12px] gap-1.5">
+          <Button onClick={() => setShowGenerate(true)} variant="outline" className="h-8 text-[12px] gap-1.5 border-accent/30 text-accent hover:bg-accent/10 hover:text-accent">
             <Sparkles className="h-3.5 w-3.5" /> New email
           </Button>
         </div>

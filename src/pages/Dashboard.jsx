@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/lib/WorkspaceContext";
-import { Users, Mail, MessageSquare, Calendar, Zap, Sparkles } from "lucide-react";
+import { Users, MessageSquare, Calendar, Zap, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import DashboardHero from "../components/DashboardHero";
@@ -126,12 +126,11 @@ export default function Dashboard() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accent="blue" />
-        <StatsCard icon={Sparkles} label="High Intent" value={highIntentCount} accent="amber" sub="Score 70+" />
-        <StatsCard icon={Mail} label="Emails Sent" value={totalSent} accent="purple" />
-        <StatsCard icon={MessageSquare} label="Reply Rate" value={`${replyRatePct}%`} accent="green" />
-        <StatsCard icon={Calendar} label="Meetings" value={meetings} accent="red" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatsCard icon={Users} label="Total Leads" value={totalLeads} accent="blue" sub={contacted > 0 ? `${contacted} contacted` : null} />
+        <StatsCard icon={Sparkles} label="High Intent" value={highIntentCount} accent="purple" sub="Score 70+" />
+        <StatsCard icon={MessageSquare} label="Reply Rate" value={`${replyRatePct}%`} accent="green" sub={`${replied} of ${contacted}`} />
+        <StatsCard icon={Calendar} label="Meetings" value={meetings} accent="amber" sub={totalSent > 0 ? `${totalSent} emails sent` : null} />
       </div>
 
       {/* Pipeline */}

@@ -65,7 +65,7 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(true)} className="p-2 -ml-2 rounded-lg hover:bg-muted">
             <Menu className="h-5 w-5 text-foreground" />
           </button>
-          <span className="ml-3 font-display font-bold text-lg text-gradient-brand">BeaconIQ</span>
+          <span className="ml-3 font-semibold text-[15px] tracking-tight text-white">BeaconIQ</span>
         </div>
         
         <main className="flex-1 overflow-y-auto">
