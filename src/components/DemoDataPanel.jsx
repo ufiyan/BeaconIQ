@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Sparkles, Trash2, Loader2, CheckCircle2, FlaskConical } from "lucide-react";
 import LaunchQAPanel from "./LaunchQAPanel";
+import TemplateReadinessPanel from "./TemplateReadinessPanel";
 
 const INCLUDED = [
   "10 inbound leads across every pipeline stage",
@@ -147,6 +148,9 @@ export default function DemoDataPanel() {
 
       {/* Launch QA checklist */}
       <LaunchQAPanel />
+
+      {/* Template publishing readiness */}
+      <TemplateReadinessPanel />
     </div>
   );
 }

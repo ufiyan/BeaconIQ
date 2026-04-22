@@ -69,6 +69,21 @@
       "type": "number",
       "title": "Monthly Email Limit",
       "default": 100
+    },
+    "sync_lock": {
+      "type": "boolean",
+      "title": "Sync Lock",
+      "default": false
+    },
+    "support_email": {
+      "type": "string",
+      "title": "Support Contact Email",
+      "description": "Displayed to users as the support contact. Required before publishing as a template."
+    },
+    "support_url": {
+      "type": "string",
+      "title": "Support / Help URL",
+      "description": "Optional help center or docs URL shown alongside support email."
     }
   },
   "required": [
