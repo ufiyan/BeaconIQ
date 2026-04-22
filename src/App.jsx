@@ -44,23 +44,25 @@ const AuthenticatedApp = () => {
     }
   }
 
-  // Public marketing site for unauthenticated visitors.
-  // Any deep-link into the app triggers the login flow via navigateToLogin().
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="*" element={<RequireAuthRedirect />} />
-      </Routes>
-    );
-  }
-
-  // Render the main app for authenticated users
+  // Public-first routing:
+  //   "/"      -> Marketing homepage (public for everyone, even authed users)
+  //   "/app"   -> Internal dashboard (auth required)
+  //   /leads, /campaigns, /emails, /settings, ... -> app routes (auth required)
+  //
+  // Authenticated users enter the app explicitly via a CTA on the landing page.
   return (
     <Routes>
-      <Route path="/onboarding" element={<Onboarding />} />
-      <Route element={<Layout />}>
-        <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+      <Route path="/" element={<Landing />} />
+
+      {/* Auth-gated app routes */}
+      <Route path="/onboarding" element={
+        isAuthenticated
+          ? <Onboarding />
+          : <RequireAuthRedirect />
+      } />
+      <Route element={isAuthenticated ? <Layout /> : <RequireAuthRedirect />}>
+        <Route path="/app" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
         <Route path="/leads" element={<ErrorBoundary><Leads /></ErrorBoundary>} />
         <Route path="/leads/:id" element={<ErrorBoundary><LeadDetail /></ErrorBoundary>} />
         <Route path="/campaigns" element={<ErrorBoundary><Campaigns /></ErrorBoundary>} />
@@ -70,6 +72,7 @@ const AuthenticatedApp = () => {
         <Route path="/review-queue" element={<ErrorBoundary><ReviewQueue /></ErrorBoundary>} />
         <Route path="/templates" element={<ErrorBoundary><Templates /></ErrorBoundary>} />
       </Route>
+
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

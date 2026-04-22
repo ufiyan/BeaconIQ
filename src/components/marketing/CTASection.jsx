@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
-export default function CTASection({ onGetStarted, onSignIn }) {
+export default function CTASection({ onGetStarted, onSignIn, isAuthenticated }) {
   return (
     <section className="max-w-6xl mx-auto px-6 py-24">
       <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-10 lg:p-14 text-center">
@@ -25,16 +25,18 @@ export default function CTASection({ onGetStarted, onSignIn }) {
               onClick={onGetStarted}
               className="h-11 px-6 text-[14px] bg-primary hover:bg-primary/90 gap-2"
             >
-              Get started free
+              {isAuthenticated ? "Go to app" : "Get started free"}
               <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button
-              onClick={onSignIn}
-              variant="outline"
-              className="h-11 px-6 text-[14px] border-border bg-secondary/40 hover:bg-secondary"
-            >
-              Sign in
-            </Button>
+            {!isAuthenticated && (
+              <Button
+                onClick={onSignIn}
+                variant="outline"
+                className="h-11 px-6 text-[14px] border-border bg-secondary/40 hover:bg-secondary"
+              >
+                Sign in
+              </Button>
+            )}
           </div>
         </div>
       </div>

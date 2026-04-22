@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 const navGroups = [
   {
     items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+      { label: "Dashboard", icon: LayoutDashboard, path: "/app" },
       { label: "Leads", icon: Users, path: "/leads" },
       { label: "Campaigns", icon: Zap, path: "/campaigns" },
     ],
@@ -46,7 +46,7 @@ export default function Sidebar({ onClose }) {
     <div className="h-full flex flex-col bg-sidebar border-r border-sidebar-border">
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-5 border-b border-sidebar-border">
-        <Link to="/" className="flex items-center gap-2.5">
+        <Link to="/app" className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-primary/15 border border-primary/25">
             <Sparkles className="h-4 w-4 text-primary" strokeWidth={2.5} />
           </div>
@@ -67,7 +67,7 @@ export default function Sidebar({ onClose }) {
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const isActive = location.pathname === item.path ||
-                  (item.path !== "/" && location.pathname.startsWith(item.path));
+                  location.pathname.startsWith(item.path + "/");
                 return (
                   <Link
                     key={item.path}

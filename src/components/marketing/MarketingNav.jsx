@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Waves } from "lucide-react";
 
-export default function MarketingNav({ onSignIn, onGetStarted }) {
+export default function MarketingNav({ onSignIn, onGetStarted, isAuthenticated }) {
   const links = [
     { label: "Product", href: "#product" },
     { label: "How it works", href: "#how" },
@@ -32,19 +32,30 @@ export default function MarketingNav({ onSignIn, onGetStarted }) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            onClick={onSignIn}
-            className="h-9 text-[13px] text-muted-foreground hover:text-white"
-          >
-            Sign in
-          </Button>
-          <Button
-            onClick={onGetStarted}
-            className="h-9 text-[13px] bg-primary hover:bg-primary/90"
-          >
-            Get started
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              onClick={onGetStarted}
+              className="h-9 text-[13px] bg-primary hover:bg-primary/90"
+            >
+              Go to app
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                onClick={onSignIn}
+                className="h-9 text-[13px] text-muted-foreground hover:text-white"
+              >
+                Sign in
+              </Button>
+              <Button
+                onClick={onGetStarted}
+                className="h-9 text-[13px] bg-primary hover:bg-primary/90"
+              >
+                Get started
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>

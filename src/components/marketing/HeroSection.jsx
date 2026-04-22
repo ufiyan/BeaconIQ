@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
 
-export default function HeroSection({ onGetStarted, onSignIn }) {
+export default function HeroSection({ onGetStarted, onSignIn, isAuthenticated }) {
   return (
     <section id="top" className="relative overflow-hidden">
       {/* subtle radial glow */}
@@ -37,16 +37,18 @@ export default function HeroSection({ onGetStarted, onSignIn }) {
             onClick={onGetStarted}
             className="h-11 px-6 text-[14px] bg-primary hover:bg-primary/90 gap-2"
           >
-            Try BeaconIQ
+            {isAuthenticated ? "Go to app" : "Try BeaconIQ"}
             <ArrowRight className="h-4 w-4" />
           </Button>
-          <Button
-            onClick={onSignIn}
-            variant="outline"
-            className="h-11 px-6 text-[14px] border-border bg-secondary/40 hover:bg-secondary"
-          >
-            Sign in
-          </Button>
+          {!isAuthenticated && (
+            <Button
+              onClick={onSignIn}
+              variant="outline"
+              className="h-11 px-6 text-[14px] border-border bg-secondary/40 hover:bg-secondary"
+            >
+              Sign in
+            </Button>
+          )}
         </div>
 
         <p className="mt-4 text-[12px] text-muted-foreground">
