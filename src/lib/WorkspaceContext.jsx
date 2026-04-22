@@ -8,7 +8,15 @@ export function WorkspaceProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshWorkspace = async () => {
-    const user = await base44.auth.me();
+    // Gracefully handle unauthenticated visitors (e.g. public landing page).
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch {
+      setWorkspace(null);
+      setIsLoading(false);
+      return;
+    }
     if (!user) { setIsLoading(false); return; }
 
     let workspaces = await base44.entities.Workspace.filter(
