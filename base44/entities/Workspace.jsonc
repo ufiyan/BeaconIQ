@@ -91,15 +91,17 @@
     "name"
   ],
   "rls": {
-    "create": true,
+    "create": {
+      "owner_user_id": "{{user.id}}"
+    },
     "read": {
-      "created_by": "{{user.email}}"
+      "owner_user_id": "{{user.id}}"
     },
     "update": {
-      "created_by": "{{user.email}}"
+      "owner_user_id": "{{user.id}}"
     },
     "delete": {
-      "created_by": "{{user.email}}"
+      "owner_user_id": "{{user.id}}"
     }
   }
 }
