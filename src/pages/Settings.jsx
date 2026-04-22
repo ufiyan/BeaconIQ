@@ -18,7 +18,7 @@ const TABS = [
   { id: "workspace", label: "Workspace",        icon: SettingsIcon, desc: "Gmail connection and workspace-level settings." },
   { id: "ingestion", label: "Email Setup",      icon: Inbox, desc: "Configure which inbox BeaconIQ watches for inbound leads." },
   { id: "followup",  label: "Follow-up Rules",  icon: Clock, desc: "Auto-remind yourself when leads go cold." },
-  { id: "demo",      label: "Demo & Testing",   icon: FlaskConical, desc: "Load realistic sample data to explore every feature end-to-end." },
+  { id: "demo",      label: "Demo & Testing",   icon: FlaskConical, desc: "Load sample data and work through the launch QA checklist before go-live." },
 ];
 
 export default function Settings() {

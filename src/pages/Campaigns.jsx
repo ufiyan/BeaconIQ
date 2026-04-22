@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Zap, Plus, Play, Pause, Trash2, Users, Mail, MessageSquare } from "lucide-react";
+import { useWorkspace } from "@/lib/WorkspaceContext";
+import { Link } from "react-router-dom";
+import { Zap, Plus, Play, Pause, Trash2, Users, Mail, MessageSquare, FlaskConical } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import EmptyState from "../components/EmptyState";
@@ -10,21 +12,24 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 
 export default function Campaigns() {
+  const { workspace, isLoading: wsLoading } = useWorkspace();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
   const loadCampaigns = async () => {
-    const user = await base44.auth.me();
-    const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
-    const workspaceId = workspaces[0]?.id;
-    const filter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
-    const data = await base44.entities.Campaign.filter(filter, "-created_date", 50);
-    setCampaigns(data);
-    setLoading(false);
+    if (!workspace?.id) { setLoading(false); return; }
+    try {
+      const data = await base44.entities.Campaign.filter({ workspace_id: workspace.id }, "-created_date", 50);
+      setCampaigns(data);
+    } catch (err) {
+      toast({ title: "Could not load campaigns", description: err?.message || "Please refresh the page.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { loadCampaigns(); }, []);
+  useEffect(() => { if (!wsLoading) loadCampaigns(); }, [workspace, wsLoading]);
 
   const toggleStatus = async (campaign) => {
     const newStatus = campaign.status === "Active" ? "Paused" : "Active";
@@ -40,7 +45,7 @@ export default function Campaigns() {
     loadCampaigns();
   };
 
-  if (loading) {
+  if (wsLoading || loading) {
     return (
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
         <PageHeader title="Campaigns" description="Loading campaigns…" />
@@ -62,11 +67,17 @@ export default function Campaigns() {
           <EmptyState
             icon={Zap}
             title="No campaigns yet"
-            description="Create an automated follow-up sequence that runs in the background — BeaconIQ handles cadence and timing for you."
+            description="Build an automated follow-up sequence that runs in the background — or load sample campaigns to explore how they work."
           >
             <Button onClick={() => setShowCreate(true)} className="h-9 text-[13px] gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> Create your first campaign
+              <Plus className="h-3.5 w-3.5" /> Create campaign
             </Button>
+            <Link
+              to="/settings?tab=demo"
+              className="inline-flex items-center h-9 px-3.5 rounded-lg text-[13px] font-medium bg-accent/10 text-accent border border-accent/25 hover:bg-accent/15 transition-colors gap-1.5"
+            >
+              <FlaskConical className="h-3.5 w-3.5" /> Load sample data
+            </Link>
           </EmptyState>
         </div>
       ) : (

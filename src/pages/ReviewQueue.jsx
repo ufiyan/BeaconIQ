@@ -121,8 +121,8 @@ export default function ReviewQueue() {
         <div className="surface rounded-xl">
           <EmptyState
             icon={GitPullRequest}
-            title="Review queue is empty"
-            description="Emails flagged by AI for manual review will appear here. High-confidence inbound leads auto-create; ambiguous ones come to you first."
+            title="Nothing to review"
+            description="There are no pending review items right now. When AI is unsure whether an inbound email is a qualified lead, it will land here for your approval."
           />
         </div>
       ) : (

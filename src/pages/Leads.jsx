@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useWorkspace } from "@/lib/WorkspaceContext";
 import IntentScoreBadge from "../components/IntentScoreBadge";
 import { Link } from "react-router-dom";
-import { Users, Plus, Upload, Search, Clock, LayoutList, Columns, X, Mail, Briefcase, Building, ArrowRight } from "lucide-react";
+import { Users, Plus, Upload, Search, Clock, LayoutList, Columns, X, Mail, Briefcase, Building, ArrowRight, FlaskConical } from "lucide-react";
 import KanbanBoard from "../components/KanbanBoard";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -172,12 +172,18 @@ export default function Leads() {
             >
               {leads.length === 0 ? (
                 <>
+                  <Button onClick={() => setShowAdd(true)} className="h-8 text-[12px] gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Add lead
+                  </Button>
                   <Button onClick={() => setShowImport(true)} variant="outline" className="h-8 text-[12px] gap-1.5">
                     <Upload className="h-3.5 w-3.5" /> Import CSV
                   </Button>
-                  <Button onClick={() => setShowAdd(true)} className="h-8 text-[12px] gap-1.5">
-                    <Plus className="h-3.5 w-3.5" /> Add manually
-                  </Button>
+                  <Link
+                    to="/settings?tab=demo"
+                    className="inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-medium bg-accent/10 text-accent border border-accent/25 hover:bg-accent/15 transition-colors gap-1.5"
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" /> Load sample
+                  </Link>
                 </>
               ) : (
                 <Button onClick={() => { setSearch(""); setStatusFilter("all"); }} variant="outline" className="h-8 text-[12px]">Clear filters</Button>

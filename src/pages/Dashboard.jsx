@@ -95,9 +95,8 @@ export default function Dashboard() {
   const maxStage = Math.max(1, ...Object.values(stageCounts));
 
   const handleSync = async () => {
-    if (!ingestionSettings?.leads_inbox) return;
+    if (!ingestionSettings?.leads_inbox || syncing) return;
     setSyncing(true);
-    toast({ title: "Sync started", description: "Checking Gmail for new leads…" });
     try {
       const user = await base44.auth.me();
       const uf = { created_by: user.email };
@@ -109,9 +108,9 @@ export default function Dashboard() {
       ]);
       setIngestionSettings(isl[0] || null);
       setIngestionLogs(ill);
-      toast({ title: "Sync complete", description: stats ? `${stats.created} new leads, ${stats.skipped} skipped` : "Sync finished" });
+      toast({ title: "Sync complete", description: stats ? `${stats.created || 0} new leads, ${stats.skipped || 0} skipped` : "Sync finished" });
     } catch (err) {
-      toast({ title: "Sync failed", description: err.message || "Unknown error", variant: "destructive" });
+      toast({ title: "Sync failed", description: err?.message || "Please try again in a moment.", variant: "destructive" });
     } finally {
       setSyncing(false);
     }
