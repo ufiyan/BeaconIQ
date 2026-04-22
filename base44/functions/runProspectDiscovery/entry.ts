@@ -21,18 +21,30 @@ Deno.serve(async (req) => {
     const { icp_id, workspace_id } = body;
     if (!icp_id || !workspace_id) return Response.json({ error: 'icp_id and workspace_id are required' }, { status: 400 });
 
-    // Validate workspace ownership — list and find by id (filter by id not supported)
-    const allWorkspaces = await base44.asServiceRole.entities.Workspace.list('-created_date', 200);
-    const workspace = allWorkspaces.find(w => w.id === workspace_id);
-    if (!workspace) {
-      return Response.json({ error: 'Workspace not found or access denied' }, { status: 403 });
+    // --- Authorization: verify the authenticated user actually owns this workspace ---
+    // We use the user-scoped client (RLS enforced) AND additionally verify owner_user_id,
+    // so a client cannot trigger discovery for a workspace they do not own by guessing an ID.
+    const ownedWorkspaces = await base44.entities.Workspace.filter(
+      { owner_user_id: user.id },
+      '-created_date',
+      200
+    ).catch(() => []);
+    const workspace = ownedWorkspaces.find(w => w.id === workspace_id);
+    if (!workspace || workspace.owner_user_id !== user.id) {
+      return Response.json(
+        { error: 'You are not authorized to run discovery for this workspace.' },
+        { status: 403 }
+      );
     }
 
-    // Load ICP — list and find by id
-    const allICPs = await base44.asServiceRole.entities.IdealCustomerProfile.filter({ workspace_id }, '-created_date', 50);
-    const icpList = allICPs.filter(i => i.id === icp_id);
-    if (!icpList.length) return Response.json({ error: 'ICP not found' }, { status: 404 });
-    const icp = icpList[0];
+    // Load ICP scoped to the verified workspace — user-scoped client, RLS enforced.
+    const icpList = await base44.entities.IdealCustomerProfile.filter(
+      { workspace_id },
+      '-created_date',
+      200
+    ).catch(() => []);
+    const icp = icpList.find(i => i.id === icp_id);
+    if (!icp) return Response.json({ error: 'ICP not found' }, { status: 404 });
 
     // Create a discovery run record
     const run = await base44.entities.DiscoveryRun.create({

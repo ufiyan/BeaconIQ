@@ -10,9 +10,14 @@ import {
   AlertTriangle, BrainCircuit, RefreshCw, WifiOff
 } from "lucide-react";
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "674651382855-anhga6tugk8gdm8dv97ousf61pdk6e3n.apps.googleusercontent.com";
+// Google Client ID must come from environment configuration only — never
+// hardcoded in client code. If this is missing, the UI will surface a clear
+// message instead of silently using a wrong/stale ID across environments.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const GOOGLE_OAUTH_CONFIGURED = Boolean(GOOGLE_CLIENT_ID);
 
 function getOAuthUrl(workspaceId) {
+  if (!GOOGLE_OAUTH_CONFIGURED) return null;
   return `https://accounts.google.com/o/oauth2/auth?` + new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: "https://app.base44.com/oauth/callback",
@@ -112,8 +117,18 @@ export default function WorkspaceSettingsTab() {
 
   const handleConnectGmail = () => {
     if (!workspace) return;
+    if (!GOOGLE_OAUTH_CONFIGURED) {
+      toast({
+        title: "Google integration is not configured",
+        description: "This environment is missing the Google Client ID. Ask an admin to set VITE_GOOGLE_CLIENT_ID.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const oauthUrl = getOAuthUrl(workspace.id);
+    if (!oauthUrl) return;
     setConnectingGmail(true);
-    window.open(getOAuthUrl(workspace.id), "_blank", "width=500,height=650");
+    window.open(oauthUrl, "_blank", "width=500,height=650");
     const onMessage = async (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === "GMAIL_CONNECTED") {
@@ -244,6 +259,17 @@ export default function WorkspaceSettingsTab() {
 
       {/* 2. Gmail */}
       <SectionCard title="Gmail Connection">
+        {!GOOGLE_OAUTH_CONFIGURED && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-warning/10 border border-warning/25">
+            <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+            <div className="text-[12px] leading-relaxed">
+              <p className="font-semibold text-warning">Google integration is not configured for this environment.</p>
+              <p className="text-muted-foreground mt-0.5">
+                Set <code className="px-1 py-0.5 rounded bg-secondary text-foreground/90 font-mono text-[11px]">VITE_GOOGLE_CLIENT_ID</code> in your environment to enable Gmail connection.
+              </p>
+            </div>
+          </div>
+        )}
         {workspace?.gmail_connected ? (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
@@ -269,8 +295,9 @@ export default function WorkspaceSettingsTab() {
             <p className="text-sm text-muted-foreground">No Gmail account connected.</p>
             <button
               onClick={handleConnectGmail}
-              disabled={connectingGmail}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-800 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+              disabled={connectingGmail || !GOOGLE_OAUTH_CONFIGURED}
+              title={!GOOGLE_OAUTH_CONFIGURED ? "Google integration is not configured for this environment" : undefined}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-800 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {connectingGmail ? <Loader2 className="h-4 w-4 animate-spin text-gray-600" /> : (
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
