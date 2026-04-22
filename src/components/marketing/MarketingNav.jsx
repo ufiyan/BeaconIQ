@@ -24,9 +24,10 @@ export default function MarketingNav({ onSignIn, onGetStarted, isAuthenticated }
             <a
               key={l.href}
               href={l.href}
-              className="text-[13px] text-muted-foreground hover:text-white transition-colors"
+              className="relative text-[13px] text-muted-foreground hover:text-white transition-colors group"
             >
               {l.label}
+              <span className="absolute left-0 -bottom-1 h-px w-0 bg-primary/70 transition-all duration-300 group-hover:w-full" />
             </a>
           ))}
         </nav>

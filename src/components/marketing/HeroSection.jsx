@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, CheckCircle2 } from "lucide-react";
 
 export default function HeroSection({ onGetStarted, onSignIn, isAuthenticated }) {
   return (
@@ -51,9 +51,18 @@ export default function HeroSection({ onGetStarted, onSignIn, isAuthenticated })
           )}
         </div>
 
-        <p className="mt-4 text-[12px] text-muted-foreground">
-          Free to try · Connect Gmail in under a minute · No credit card required
-        </p>
+        {/* Trust chips — subtle, not flashy */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-success" /> Free to try
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-primary" /> Gmail in under a minute
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-gold" /> No credit card required
+          </span>
+        </div>
 
         {/* Product preview card */}
         <div className="mt-16 relative max-w-5xl mx-auto">
