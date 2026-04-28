@@ -8,7 +8,14 @@ export function WorkspaceProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshWorkspace = async () => {
-    // Gracefully handle unauthenticated visitors (e.g. public landing page).
+    // Skip workspace bootstrap on the public landing page — no need to create
+    // a workspace for anonymous (or merely browsing) visitors.
+    if (typeof window !== "undefined" && window.location.pathname === "/") {
+      setIsLoading(false);
+      return;
+    }
+
+    // Gracefully handle unauthenticated visitors.
     let user = null;
     try {
       user = await base44.auth.me();
@@ -26,12 +33,20 @@ export function WorkspaceProvider({ children }) {
     ).catch(() => []);
 
     if (workspaces.length === 0) {
-      const created = await base44.entities.Workspace.create({
-        owner_user_id: user.id,
-        name: user.full_name ? `${user.full_name}'s Workspace` : "My Workspace",
-        onboarding_complete: false,
-      });
-      workspaces = [created];
+      try {
+        const created = await base44.entities.Workspace.create({
+          owner_user_id: user.id,
+          name: user.full_name ? `${user.full_name}'s Workspace` : "My Workspace",
+          onboarding_complete: false,
+        });
+        workspaces = [created];
+      } catch (err) {
+        // Permission denied or transient error — surface no workspace rather than crash the app.
+        console.warn("Workspace auto-create skipped:", err?.message);
+        setWorkspace(null);
+        setIsLoading(false);
+        return;
+      }
     }
 
     setWorkspace(workspaces[0]);
