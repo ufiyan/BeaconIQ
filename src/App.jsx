@@ -20,6 +20,7 @@ import EmailIngestion from './pages/EmailIngestion';
 import ReviewQueue from './pages/ReviewQueue';
 import OAuthCallback from './pages/OAuthCallback';
 import Templates from './pages/Templates';
+import SeoScore from './pages/SeoScore';
 
 // Routes that MUST stay public — no auth prompt on visit.
 const PUBLIC_PATHS = ["/"];
@@ -93,6 +94,7 @@ const AuthenticatedApp = () => {
         <Route path="/email-ingestion" element={<ErrorBoundary><EmailIngestion /></ErrorBoundary>} />
         <Route path="/review-queue" element={<ErrorBoundary><ReviewQueue /></ErrorBoundary>} />
         <Route path="/templates" element={<ErrorBoundary><Templates /></ErrorBoundary>} />
+        <Route path="/seo-score" element={<ErrorBoundary><SeoScore /></ErrorBoundary>} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

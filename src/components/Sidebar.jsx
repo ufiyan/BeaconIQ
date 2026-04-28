@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Inbox, GitPullRequest, FileText, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Inbox, GitPullRequest, FileText, FlaskConical, Gauge } from "lucide-react";
 import BrandLockup from "./BrandLockup";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
@@ -25,6 +25,7 @@ const navGroups = [
     label: "Workspace",
     items: [
       { label: "Email Templates", icon: FileText, path: "/templates" },
+      { label: "SEO Score", icon: Gauge, path: "/seo-score" },
       { label: "Settings", icon: Settings, path: "/settings" },
     ],
   },
