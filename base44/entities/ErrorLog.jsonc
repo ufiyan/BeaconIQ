@@ -26,6 +26,11 @@
     "context": {
       "type": "string",
       "title": "Additional Context (JSON)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "maxLength": 1000
     }
   },
   "required": [

@@ -69,6 +69,11 @@
       "title": "Gmail Connected",
       "default": false
     },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "maxLength": 1000
+    },
     "is_demo": {
       "type": "boolean",
       "title": "Is Demo Record",

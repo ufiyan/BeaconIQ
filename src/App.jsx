@@ -21,6 +21,8 @@ import ReviewQueue from './pages/ReviewQueue';
 import OAuthCallback from './pages/OAuthCallback';
 import Templates from './pages/Templates';
 import SeoScore from './pages/SeoScore';
+import About from './pages/About';
+import Contact from './pages/Contact';
 
 // Routes that MUST stay public — no auth prompt on visit.
 const PUBLIC_PATHS = ["/"];
@@ -76,6 +78,8 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/contact" element={<Contact />} />
 
       {/* Auth-gated app routes */}
       <Route path="/onboarding" element={

@@ -47,6 +47,11 @@
       "title": "Active Profile",
       "default": true
     },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "maxLength": 1000
+    },
     "is_demo": {
       "type": "boolean",
       "title": "Is Demo Record",
