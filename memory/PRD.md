@@ -77,6 +77,17 @@ Plus build infrastructure:
 - ✅ DONE: Lead RLS reconciled — `workspace_id` is now `required` on Lead and 11 other workspace-scoped entities (BusinessProfile, Campaign, EmailIngestionLog, EmailIngestionSettings, EmailLog, ErrorLog, FollowUpReminder, IdealCustomerProfile, IntentScore, Prospect, ProspectContact, ProspectSignal). RLS read/update/delete remain `created_by`-based for per-user isolation; `workspace_id` is now non-skippable for tenant tagging.
 - ✅ DONE: `aiClient` (`/app/base44/functions/aiClient/entry.ts` and the duplicated copy inside `gmailSync/entry.ts`) now defaults to `gpt-4o-mini` and uses OpenAI's strict `response_format: json_schema` instead of `json_object` + prompt-injected schema.
 - ✅ DONE: `/app/public/manifest.json` created and serves 200 from both local and preview ingress.
+- ✅ DONE (Jan 2026 #2): React Router v6 → v7 future flags (`v7_startTransition`, `v7_relativeSplatPath`) — silenced deprecation warnings.
+- ✅ DONE (Jan 2026 #2): Live Stripe Checkout wired up. `/app/backend/server.py` exposes:
+  - `POST /api/payments/checkout/session` — creates a Stripe-hosted session for `package_id` ∈ {starter, pro}; price defined server-side only.
+  - `GET /api/payments/checkout/status/{session_id}` — reads from Mongo (Emergent test proxy doesn't support Session.retrieve; webhook is source of truth).
+  - `POST /api/webhook/stripe` — handles signed webhook, updates `payment_status` + flips `status` to `complete` on `checkout.session.completed`.
+  - Frontend `PricingSection.jsx` CTAs redirect via `window.location.href` to Stripe; `StripeReturnHandler.jsx` toasts on return.
+  - Mongo collection `beaconiq.payment_transactions` persists every checkout attempt.
+  - Backend regression test suite at `/app/backend/tests/test_stripe_payments.py` (10/10 passing in iteration 2).
+- ✅ DONE (Jan 2026 #2): `runProspectDiscovery` feature removed entirely. Deleted entities (`Prospect`, `ProspectContact`, `ProspectSignal`, `DiscoveryRun`, `IdealCustomerProfile`), Deno functions (`runProspectDiscovery`, `convertProspectToLead`, `generateProspectOutreach`), the entire `src/components/prospect/` directory, and updated `About.jsx` marketing copy.
+- ✅ DONE (Jan 2026 #2): Base44 transparent proxy in `/app/backend/server.py` now forces `Accept-Encoding: identity` upstream so brotli/zstd-encoded responses never leak through (httpx didn't have those codecs installed; the previous proxy was returning compressed garbage when the client requested compression).
 - USER ACTION: Add `https://ce575c72-9c35-4df0-aa04-7bff24f34586.preview.emergentagent.com/oauth/callback` to your Google Cloud OAuth client's authorized redirect URIs so Gmail connect works in this preview.
 - USER ACTION: Push the Base44 entity + function changes (in `/app/base44/`) to your Base44 app so the new RLS rules and AI client take effect server-side.
-- P2: Migrate React Router to v7 (`v7_startTransition`, `v7_relativeSplatPath` flags) to silence the future-flag warnings.
+- USER ACTION (when going to real production with a real Stripe account): set `STRIPE_API_KEY` to a real `sk_live_...` (or `sk_test_...`) and configure the webhook URL in your Stripe dashboard to point at `https://<domain>/api/webhook/stripe` — then `stripe.checkout.Session.retrieve()` will work and you can simplify `get_checkout_status` if you want.
+- P2: Migrate FastAPI `@app.on_event` to the new lifespan context API (cosmetic).

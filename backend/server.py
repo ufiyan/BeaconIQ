@@ -218,16 +218,20 @@ async def stripe_webhook(request: Request) -> dict:
 
     db = _db()
     if event.session_id:
+        update = {
+            "payment_status": event.payment_status,
+            "webhook_event_type": event.event_type,
+            "webhook_event_id": event.event_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # When Stripe says the checkout completed, mirror that into our
+        # `status` column so the frontend can distinguish "initiated" from
+        # "complete" without having to look at payment_status separately.
+        if event.event_type == "checkout.session.completed":
+            update["status"] = "complete"
         await db.payment_transactions.update_one(
             {"session_id": event.session_id},
-            {
-                "$set": {
-                    "payment_status": event.payment_status,
-                    "webhook_event_type": event.event_type,
-                    "webhook_event_id": event.event_id,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            },
+            {"$set": update},
         )
     return {"received": True}
 
