@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 2 backend regression of BeaconIQ Stripe Checkout + Base44 proxy. All 10 pytest tests pass (10/10 = 100%). The three bugs from iteration 1 are fully resolved: (1) status endpoint now returns 200 with payment_status='pending', status='initiated' by reading from Mongo (correctly bypassing the Emergent Stripe test proxy which doesn't support Session.retrieve); (2) unknown session_id now returns a clean 404 instead of 500; (3) Base44 proxy now returns parseable JSON even when the client sends Accept-Encoding: gzip, br, zstd — server forces accept-encoding=identity upstream so no compressed body leaks through.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/payments/checkout/session", "issue": "Minor: webhook URL passed to StripeCheckout is built from request.base_url which will be the internal uvicorn URL (http://127.0.0.1:8001/...) in some ingress setups. For real Stripe webhook delivery in production, this should be an env-driven public URL. Not blocking for the Emergent test key flow."},
+      {"endpoint": "server.py startup/shutdown", "issue": "Uses deprecated @app.on_event('startup'/'shutdown'); FastAPI recommends lifespan context. Cosmetic."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_stripe_payments.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py _db() uses assert _mongo_client is not None — assertions are stripped under python -O. Prefer explicit guard (raise RuntimeError).",
+    "server.py get_checkout_status: docstring is crystal-clear about why we read from Mongo — good. Consider also returning the created_at/updated_at timestamps so the frontend can show 'pending since ...'.",
+    "server.py proxy: _HOP_BY_HOP now correctly includes content-encoding AND upstream Accept-Encoding is forced to identity — both together make the solution robust. Alternatively install httpx[brotli,zstd] for defence-in-depth, but not required.",
+    "server.py: stripe_webhook persists payment_status but never writes status='complete' or 'paid'. If the frontend distinguishes between status and payment_status, consider syncing both on webhook event_type == 'checkout.session.completed'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_stripe_payments.py (expanded — adds br/zstd Accept-Encoding case, tightens Mongo-source assertions, expects 404 for bogus id)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not-tested"},
+  "test_credentials": "N/A — Stripe sk_test_emergent in /app/backend/.env. No app auth flow tested.",
+  "seed_data_creation": "Each test run creates two beaconiq.payment_transactions rows (one starter + one pro) on the live Emergent test Stripe key. Rows left in place per task instructions. Collection will grow over time — consider TTL or cleanup fixture in the future.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests at /app/backend/tests/test_stripe_payments.py. Public base URL is hardcoded in /app/backend/tests/conftest.py (https://ce575c72-9c35-4df0-aa04-7bff24f34586.preview.emergentagent.com). Run: pytest /app/backend/tests/ -v --tb=short. All 10 tests green as of iteration 2. When verifying changes to the webhook path, note the webhook cannot be tested directly without a valid Stripe-Signature header.",
+  "rca of the issue": "All three iteration-1 bugs verified fixed. (1) Status 500 on real session: fixed by sourcing from Mongo instead of calling stripe.checkout.Session.retrieve() (which the Emergent test proxy returns 404 for, and which the emergentintegrations lib couldn't parse anyway due to StripeObject-vs-dict metadata mismatch). (2) Status 500 on bogus session id: fixed by explicit find_one() + HTTPException(404). (3) Proxy compressed-body garbage: fixed by forcing forward_headers['accept-encoding'] = 'identity' before calling upstream, so Base44 never returns br/zstd bytes; the hop-by-hop stripping of content-encoding/content-length is then safe because the body is already plain."
+}

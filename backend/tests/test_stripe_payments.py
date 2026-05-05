@@ -1,15 +1,16 @@
 """
-BeaconIQ backend regression tests:
-- /api/health
-- Stripe Checkout session creation (valid, invalid, missing fields)
-- Stripe Checkout status retrieval (valid + bogus session id)
-- Catch-all Base44 proxy still works
+BeaconIQ backend regression tests (iteration 2).
+
+Coverage:
+- /api/health (stripe + mongo flags)
+- Stripe Checkout session creation (starter, pro, unknown package, missing origin)
+- Stripe Checkout status retrieval (reads from Mongo; 404 for unknown)
 - MongoDB persistence of payment_transactions row
+- Base44 catch-all proxy returns decoded JSON even when client sends
+  Accept-Encoding: gzip, br, zstd
 """
 
-import os
 import pytest
-import requests
 from pymongo import MongoClient
 
 MONGO_URL = "mongodb://localhost:27017"
@@ -39,7 +40,7 @@ class TestCheckoutSessionCreate:
         assert "url" in data and data["url"].startswith("https://")
         assert "stripe.com" in data["url"] or "checkout" in data["url"]
         assert "session_id" in data and isinstance(data["session_id"], str)
-        # Stash for later test usage
+        assert len(data["session_id"]) > 0
         pytest.starter_session_id = data["session_id"]
 
     def test_create_pro_session(self, api_client, base_url):
@@ -69,28 +70,27 @@ class TestCheckoutSessionCreate:
         assert r.status_code == 422, r.text
 
 
-# --- Stripe Checkout: status -------------------------------------------------
+# --- Stripe Checkout: status (now reads from Mongo) -------------------------
 class TestCheckoutStatus:
-    def test_status_for_real_session(self, api_client, base_url):
+    def test_status_for_real_session_returns_pending(self, api_client, base_url):
+        """Freshly created session should be payment_status=pending, status=initiated.
+        Source is Mongo (Emergent test proxy does not support session.retrieve)."""
         sid = getattr(pytest, "starter_session_id", None)
         if not sid:
             pytest.skip("No starter session id available")
         r = api_client.get(f"{base_url}/api/payments/checkout/status/{sid}")
         assert r.status_code == 200, r.text
         data = r.json()
-        assert "status" in data
-        assert "payment_status" in data
-        assert "amount_total" in data
-        assert "currency" in data
-        # Status before any user payment should be "open" / "unpaid"
-        assert data["payment_status"] in ("unpaid", "paid", "no_payment_required")
+        assert data["payment_status"] == "pending", data
+        assert data["status"] == "initiated", data
+        assert data["currency"] == "usd"
+        assert isinstance(data["metadata"], dict)
+        assert data["metadata"].get("package_id") == "starter"
 
-    def test_status_for_bogus_session_does_not_crash(self, api_client, base_url):
+    def test_status_for_bogus_session_returns_404(self, api_client, base_url):
         bogus = "cs_test_bogus_does_not_exist_12345"
         r = api_client.get(f"{base_url}/api/payments/checkout/status/{bogus}")
-        # Should be a 4xx/5xx but service must not be down
-        assert r.status_code >= 400, r.text
-        assert r.status_code < 600
+        assert r.status_code == 404, r.text
 
 
 # --- Mongo persistence -------------------------------------------------------
@@ -103,6 +103,7 @@ class TestMongoPersistence:
         try:
             doc = client[DB_NAME].payment_transactions.find_one({"session_id": sid})
             assert doc is not None, f"No payment_transactions row for session {sid}"
+            assert doc["session_id"] == sid
             assert doc["package_id"] == "starter"
             assert float(doc["amount"]) == 29.0
             assert doc["currency"] == "usd"
@@ -115,12 +116,25 @@ class TestMongoPersistence:
 
 # --- Base44 catch-all proxy --------------------------------------------------
 class TestBase44Proxy:
-    def test_public_settings_proxy(self, api_client, base_url):
+    def test_public_settings_proxy_identity(self, api_client, base_url):
         url = f"{base_url}/api/apps/public/prod/public-settings/by-id/69ceddc3e8db99cfbe0e3b39"
-        r = api_client.get(url)
+        r = api_client.get(url, headers={"Accept-Encoding": "identity"})
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
-        # Must be JSON from Base44
         data = r.json()
         assert isinstance(data, dict)
-        # Should at least look like a Base44 public_settings payload
+        assert len(data.keys()) > 0
+
+    def test_public_settings_proxy_with_br_zstd_accept_encoding(self, base_url):
+        """Client sends Accept-Encoding: gzip, br, zstd — proxy must still
+        return valid JSON (upstream request forced to identity by server).
+        Use a fresh session with no auto-decompression to verify raw bytes
+        are parseable JSON."""
+        import requests
+        url = f"{base_url}/api/apps/public/prod/public-settings/by-id/69ceddc3e8db99cfbe0e3b39"
+        r = requests.get(url, headers={"Accept-Encoding": "gzip, br, zstd"})
+        assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
+        # requests auto-decodes gzip; but if upstream returned br/zstd raw
+        # bytes, r.json() would fail. Primary assertion: JSON parseable.
+        data = r.json()
+        assert isinstance(data, dict)
         assert len(data.keys()) > 0

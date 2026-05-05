@@ -185,33 +185,27 @@ async def create_checkout_session(
 
 @app.get("/api/payments/checkout/status/{session_id}", response_model=CheckoutStatusOut)
 async def get_checkout_status(session_id: str, request: Request) -> CheckoutStatusOut:
-    stripe = _stripe_for(request)
-    status: CheckoutStatusResponse = await stripe.get_checkout_status(session_id)
+    """
+    Returns the latest checkout status from Mongo (written by the Stripe
+    webhook).
 
-    db = _db()
-    existing = await db.payment_transactions.find_one({"session_id": session_id})
-
-    # Idempotent update: only flip to a new state, never re-process a paid one.
-    if existing is not None and existing.get("payment_status") != "paid":
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {
-                "$set": {
-                    "payment_status": status.payment_status,
-                    "status": status.status,
-                    "amount_total": status.amount_total,
-                    "currency": status.currency,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-            },
-        )
-
+    Note: we deliberately do NOT call `stripe.checkout.Session.retrieve` here.
+    The Emergent test Stripe proxy at integrations.emergentagent.com only
+    supports session creation; retrieves return 404. The webhook is the
+    canonical source of truth — when a real Stripe payment lands, the webhook
+    writes `payment_status: 'paid'` into the matching row.
+    """
+    if not STRIPE_API_KEY:
+        raise HTTPException(500, "Stripe is not configured (STRIPE_API_KEY missing)")
+    record = await _db().payment_transactions.find_one({"session_id": session_id})
+    if record is None:
+        raise HTTPException(status_code=404, detail="No transaction for this session_id")
     return CheckoutStatusOut(
-        status=status.status,
-        payment_status=status.payment_status,
-        amount_total=status.amount_total,
-        currency=status.currency,
-        metadata=status.metadata or {},
+        status=record.get("status") or "open",
+        payment_status=record.get("payment_status") or "pending",
+        amount_total=int(record.get("amount_total") or 0),
+        currency=record.get("currency") or "usd",
+        metadata=dict(record.get("metadata") or {}),
     )
 
 
@@ -255,6 +249,11 @@ async def proxy(full_path: str, request: Request) -> Response:
     forward_headers = {
         k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP
     }
+    # Force the upstream to send an uncompressed body. httpx does not bundle
+    # brotli/zstd codecs by default, so if Base44 returns br/zstd-encoded
+    # content we'd ship raw compressed bytes back to the client (whose
+    # `content-encoding` we strip) and JSON parsing would fail.
+    forward_headers["accept-encoding"] = "identity"
     body = await request.body()
 
     upstream_resp = await _proxy_client.request(
