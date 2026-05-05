@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -64,8 +65,7 @@ const AuthenticatedApp = () => {
           </Routes>
         );
       }
-      navigateToLogin();
-      return null;
+      return <AuthRequiredRedirect navigateToLogin={navigateToLogin} />;
     }
   }
 
@@ -110,7 +110,17 @@ const AuthenticatedApp = () => {
 // then return them to that same route after auth.
 const RequireAuthRedirect = () => {
   const { navigateToLogin } = useAuth();
-  navigateToLogin();
+  useEffect(() => {
+    navigateToLogin();
+  }, [navigateToLogin]);
+  return null;
+};
+
+// Fires navigateToLogin from inside a render-safe effect when auth is required.
+const AuthRequiredRedirect = ({ navigateToLogin }) => {
+  useEffect(() => {
+    navigateToLogin();
+  }, [navigateToLogin]);
   return null;
 };
 

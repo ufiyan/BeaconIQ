@@ -32,7 +32,7 @@ export default function Onboarding() {
     const workspace = await getOrCreateWorkspace(user);
     await base44.entities.BusinessProfile.create({ ...form, onboarding_complete: true, workspace_id: workspace.id });
     setSaving(false);
-    navigate("/");
+    navigate("/app");
   };
 
   const canNext = () => {

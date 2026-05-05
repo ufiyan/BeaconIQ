@@ -85,8 +85,15 @@ Deno.serve(async (req) => {
     }, { status: 400 });
   }
 
-  // Use the redirect_uri from the request (sent by the frontend), falling back to a canonical default
-  const effectiveRedirectUri = redirect_uri || 'https://app.base44.com/oauth/callback';
+  // Require redirect_uri from the request — must match exactly what was used
+  // to obtain the authorization code, otherwise Google will reject the exchange.
+  if (!redirect_uri) {
+    return Response.json({
+      success: false,
+      error: 'Missing redirect_uri in request body. The frontend must send the same redirect_uri that was used in the OAuth authorization step.',
+    }, { status: 400 });
+  }
+  const effectiveRedirectUri = redirect_uri;
   console.log('[connectGmail] Using redirect_uri:', effectiveRedirectUri);
 
   const base44 = createClientFromRequest(req);

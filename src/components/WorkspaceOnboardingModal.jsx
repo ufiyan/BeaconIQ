@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Loader2, Mail, Sparkles, Building2, ArrowRight, Inbox } from "lucide-react";
-import { buildGmailOAuthUrl, getOAuthRedirectUri } from "@/lib/oauthRedirect";
+import { buildGmailOAuthUrl } from "@/lib/oauthRedirect";
 
 const STEPS = [
   { id: 1, label: "Workspace", icon: Building2 },
@@ -29,11 +29,16 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
   const [loading, setLoading] = useState(false);
   const [workspace, setWorkspace] = useState(null);
   const pollIntervalRef = useRef(null);
+  const messageHandlerRef = useRef(null);
 
-  // Clean up polling on unmount
+  // Clean up polling + postMessage listener on unmount
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (messageHandlerRef.current) {
+        window.removeEventListener("message", messageHandlerRef.current);
+        messageHandlerRef.current = null;
+      }
     };
   }, []);
 
@@ -41,6 +46,10 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
+    }
+    if (messageHandlerRef.current) {
+      window.removeEventListener("message", messageHandlerRef.current);
+      messageHandlerRef.current = null;
     }
     setPolling(false);
   };
@@ -97,12 +106,12 @@ export default function WorkspaceOnboardingModal({ user, onComplete }) {
     const onMessage = (event) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === "GMAIL_CONNECTED") {
-        window.removeEventListener("message", onMessage);
         stopPolling();
         setGmailEmail(event.data.gmail_email || null);
         setGmailConnected(true);
       }
     };
+    messageHandlerRef.current = onMessage;
     window.addEventListener("message", onMessage);
 
     // Also start DB polling (reliable fallback)

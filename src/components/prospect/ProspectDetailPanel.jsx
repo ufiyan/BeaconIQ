@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { X, Building2, MapPin, Users, Globe, Sparkles, Bookmark, UserCircle, Loader2, ExternalLink } from "lucide-react";
+import { X, Building2, MapPin, Users, Globe, Sparkles, Bookmark, UserCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

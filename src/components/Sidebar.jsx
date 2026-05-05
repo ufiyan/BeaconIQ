@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, Mail, Zap, Settings, X, LogOut, Inbox, GitPullR
 import BrandLockup from "./BrandLockup";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { useWorkspace } from "@/lib/WorkspaceContext";
 import { useState, useEffect } from "react";
 
 const navGroups = [
@@ -34,15 +35,16 @@ const navGroups = [
 export default function Sidebar({ onClose }) {
   const location = useLocation();
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
-    if (!user) return;
+    if (!workspace?.id) return;
     base44.entities.EmailIngestionLog
-      .filter({ created_by: user.email, result: "pending_review" }, "-created_date", 200)
+      .filter({ workspace_id: workspace.id, result: "pending_review" }, "-created_date", 200)
       .then((items) => setPendingCount(items.length))
       .catch(() => {});
-  }, [location.pathname, user]);
+  }, [location.pathname, workspace]);
 
   return (
     <div className="h-full flex flex-col bg-sidebar border-r border-sidebar-border">

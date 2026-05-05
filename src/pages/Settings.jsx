@@ -41,8 +41,11 @@ export default function Settings() {
     base44.auth.me().then(async user => {
       const workspaces = await base44.entities.Workspace.filter({ owner_user_id: user.id }, '-created_date', 1).catch(() => []);
       const workspaceId = workspaces[0]?.id;
-      const profileFilter = workspaceId ? { workspace_id: workspaceId } : { created_by: user.email };
-      base44.entities.BusinessProfile.filter(profileFilter, "-created_date", 1).then(data => {
+      if (!workspaceId) {
+        setLoading(false);
+        return;
+      }
+      base44.entities.BusinessProfile.filter({ workspace_id: workspaceId }, "-created_date", 1).then(data => {
         if (data.length > 0) {
           setProfile(data[0]);
           setForm({
