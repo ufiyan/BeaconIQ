@@ -11,6 +11,7 @@ import WhyBeaconIQ from "@/components/marketing/WhyBeaconIQ";
 import PricingSection from "@/components/marketing/PricingSection";
 import CTASection from "@/components/marketing/CTASection";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
+import StripeReturnHandler from "@/components/StripeReturnHandler";
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-inter">
+      <StripeReturnHandler />
       <MarketingNav
         onSignIn={goToApp}
         onGetStarted={goToApp}

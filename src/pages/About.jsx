@@ -29,19 +29,18 @@ export default function About() {
           <p className="text-base text-foreground/85 leading-relaxed mb-6">
             BeaconIQ ingests inbound messages, extracts the people and companies behind
             them, and scores each lead on intent and decision authority. From there, your
-            team gets a clean pipeline view, smart follow-up reminders, prospect discovery
-            against your Ideal Customer Profile, and AI-generated outreach drafts grounded
-            in your business context. Everything runs inside a single workspace you fully
-            control.
+            team gets a clean pipeline view, smart follow-up reminders, and AI-generated
+            outreach drafts grounded in your business context. Everything runs inside a
+            single workspace you fully control.
           </p>
 
           <h2 className="text-2xl font-semibold text-white mt-10 mb-3">Who it&apos;s for</h2>
           <p className="text-base text-foreground/85 leading-relaxed mb-6">
             BeaconIQ is designed for founders, account executives, sales development
             representatives, and growth marketers at B2B SaaS, agencies, and consulting
-            firms. If your team relies on email-driven inbound, demo requests, partner
-            referrals, or outbound prospecting against a defined ICP, BeaconIQ helps you
-            move faster without bolting together five separate tools.
+            firms. If your team relies on email-driven inbound, demo requests, or partner
+            referrals, BeaconIQ helps you move faster without bolting together five
+            separate tools.
           </p>
 
           <h2 className="text-2xl font-semibold text-white mt-10 mb-3">Who builds it</h2>

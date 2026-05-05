@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="9" time="3.229" timestamp="2026-05-05T04:02:47.467481+00:00" hostname="agent-env-ce575c72-9c35-4df0-aa04-7bff24f34586"><testcase classname="backend.tests.test_stripe_payments.TestHealth" name="test_health_ok" time="0.205" /><testcase classname="backend.tests.test_stripe_payments.TestCheckoutSessionCreate" name="test_create_starter_session" time="0.668" /><testcase classname="backend.tests.test_stripe_payments.TestCheckoutSessionCreate" name="test_create_pro_session" time="0.665" /><testcase classname="backend.tests.test_stripe_payments.TestCheckoutSessionCreate" name="test_create_unknown_package_returns_400" time="0.184" /><testcase classname="backend.tests.test_stripe_payments.TestCheckoutSessionCreate" name="test_create_missing_origin_url_returns_422" time="0.229" /><testcase classname="backend.tests.test_stripe_payments.TestCheckoutStatus" name="test_status_for_real_session" time="0.353"><failure message="AssertionError: Internal Server Error&#10;assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">backend/tests/test_stripe_payments.py:79: in test_status_for_real_session
+    assert r.status_code == 200, r.text
+E   AssertionError: Internal Server Error
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_stripe_payments.TestCheckoutStatus" name="test_status_for_bogus_session_does_not_crash" time="0.428" /><testcase classname="backend.tests.test_stripe_payments.TestMongoPersistence" name="test_payment_transaction_row_exists" time="0.005" /><testcase classname="backend.tests.test_stripe_payments.TestBase44Proxy" name="test_public_settings_proxy" time="0.345"><failure message="requests.exceptions.JSONDecodeError: Invalid control character at: line 1 column 2 (char 1)">/root/.venv/lib/python3.11/site-packages/requests/models.py:978: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:353: in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ^^^^^^^^^^^^^^^^^^^^^^
+E   json.decoder.JSONDecodeError: Invalid control character at: line 1 column 2 (char 1)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_stripe_payments.py:123: in test_public_settings_proxy
+    data = r.json()
+           ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:982: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Invalid control character at: line 1 column 2 (char 1)</failure></testcase></testsuite></testsuites>

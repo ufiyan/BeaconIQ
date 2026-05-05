@@ -1,0 +1,55 @@
+{
+  "summary": "Backend regression test of BeaconIQ Stripe Checkout integration + Base44 catch-all proxy. 7/9 functional checks pass. Two real bugs uncovered: (1) /api/payments/checkout/status/{session_id} returns HTTP 500 on the happy path because emergentintegrations cannot construct CheckoutStatusResponse — the metadata field comes back as a StripeObject and Pydantic v2 rejects it; (2) the same endpoint also returns 500 (not 4xx) for unknown session IDs because CheckoutError is unhandled. Bonus: the catch-all Base44 proxy ships compressed (br/zstd) bytes without a content-encoding header so callers receive binary garbage.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/payments/checkout/status/{session_id}",
+        "issue": "Returns 500 on a perfectly valid, freshly-created session id. Stack: `emergentintegrations.payments.stripe.checkout.get_checkout_status` → `CheckoutError: Unexpected error retrieving session status: 1 validation error for CheckoutStatusResponse — metadata: Input should be a valid dictionary [type=dict_type, input_value=<StripeObject ...>]`. Stripe SDK returns metadata as a `StripeObject`; the Pydantic v2 model in emergentintegrations expects a plain dict. Fix: in /app/backend/server.py wrap the call and coerce/await metadata, e.g. `metadata=dict(status.metadata or {})`, or pin/upgrade emergentintegrations, or call `stripe.checkout.Session.retrieve()` directly and build the response manually.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "GET /api/payments/checkout/status/{session_id}",
+        "issue": "Unknown session id (`cs_test_bogus_does_not_exist_12345`) bubbles `stripe._error.InvalidRequestError` up to a generic 500. Should be `HTTPException(status_code=404, detail=...)`. Wrap `stripe.get_checkout_status(session_id)` in try/except CheckoutError → raise HTTPException(404).",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "GET /api/{full_path:path} (Base44 proxy)",
+        "issue": "Proxy forwards the upstream's raw compressed body (brotli/zstd) but strips `content-encoding` (it is in `_HOP_BY_HOP`). Client receives binary bytes and JSON parsing fails. Repro: `curl -H 'Accept-Encoding: identity' .../api/apps/public/prod/public-settings/by-id/69ceddc3e8db99cfbe0e3b39 | od -c` → garbage. Two valid fixes: (a) remove `content-encoding` from `_HOP_BY_HOP` so the encoding header survives, OR (b) install `httpx[brotli]` + `httpx[zstd]` and let httpx decode (it already auto-decodes gzip). The header status code is 200 so the bug only manifests when reading the body — frontend SDK that does response.json() will break.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stripe_payments.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix /api/payments/checkout/status/{session_id} so happy path returns 200 — coerce metadata to dict before constructing CheckoutStatusResponse, or build the response from the raw stripe SDK call.",
+    "Wrap get_checkout_status in try/except (CheckoutError, InvalidRequestError) → HTTPException(404).",
+    "Fix Base44 proxy compressed-body issue — remove `content-encoding` from `_HOP_BY_HOP` (and ideally `content-length` should also be re-let through or recomputed) so the browser can decode the body. Alternatively install httpx[brotli,zstd]."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py: `_HOP_BY_HOP` lists `content-encoding` and `content-length` as hop-by-hop. They are NOT — they are entity headers (RFC 7230). Stripping them while forwarding the original body causes the binary-garbage bug above.",
+    "/app/backend/server.py: `get_checkout_status` has no error handling around the third-party call. Any Stripe error (404, network, validation) becomes a 500.",
+    "/app/backend/server.py: `_db()` uses `assert _mongo_client is not None` — assertions are stripped under `python -O`. Replace with explicit guard.",
+    "/app/backend/server.py: lifespan handlers use deprecated `@app.on_event('startup' / 'shutdown')`. Use FastAPI `lifespan` context."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_stripe_payments.py (new)"
+  ],
+  "success_rate": {"backend": "78%", "frontend": "not-tested"},
+  "test_credentials": "Not applicable — Stripe sk_test_emergent already in /app/backend/.env. No app auth tested.",
+  "seed_data_creation": "One real Stripe Checkout Session was created on the live Emergent test key and a corresponding `beaconiq.payment_transactions` row (package_id=starter, amount=29 USD, payment_status=pending) was persisted by the create-session test, as required by the request. A second pro-tier session was also created. These rows have NOT been deleted — left in place per the task instructions.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests live in /app/backend/tests/test_stripe_payments.py and use the public preview URL hardcoded in conftest.py. Two tests are expected to fail until the main agent fixes the status endpoint and the proxy content-encoding issue: `TestCheckoutStatus::test_status_for_real_session` and `TestBase44Proxy::test_public_settings_proxy`. Re-run with `pytest /app/backend/tests/ -v --tb=short`. Mongo `beaconiq.payment_transactions` collection accumulates a row per create-session call; consider cleanup if it grows.",
+  "rca of the issue": "Status 500 RCA: emergentintegrations.payments.stripe.checkout.get_checkout_status calls stripe.checkout.Session.retrieve(), which returns a Stripe `StripeObject` whose `metadata` attribute is itself a `StripeObject` (dict-like, but not a plain dict). The library then constructs a Pydantic v2 `CheckoutStatusResponse(metadata=<StripeObject>)`. Pydantic v2 strict-checks `dict` and rejects the StripeObject, raising ValidationError, which the library wraps as `CheckoutError: Unexpected error retrieving session status...`. This propagates to FastAPI as 500. Mitigation: in server.py, call stripe SDK directly OR shim the metadata: `status.metadata = dict(status.metadata)` before returning. Reproduction: POST /api/payments/checkout/session with package_id=starter, then GET /api/payments/checkout/status/{returned_session_id} → 500. Proxy RCA: backend's _HOP_BY_HOP set incorrectly classifies `content-encoding`/`content-length` as hop-by-hop and strips them, while httpx returned the raw compressed (br/zstd) body because those codecs aren't installed; client then sees compressed bytes labeled as plain content."
+}
