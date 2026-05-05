@@ -74,11 +74,9 @@ Plus build infrastructure:
   RLS — security model is "consistent enough" but not enforced everywhere.
 
 ## Next action items (P1 backlog, not blocking)
-- P1: Reconcile Lead RLS rule with `workspace_id` to make tenant isolation
-  cryptographically enforced rather than convention.
-- P1: Bump `aiClient` defaults to gpt-4o-mini (the modal advertises it but
-  code uses gpt-4o).
-- P1: Add `/manifest.json` referenced from `index.html` (currently 404s).
-- P2: Migrate React Router to v7 (`v7_startTransition`, `v7_relativeSplatPath`
-  flags) to silence the future-flag warnings.
-- P2: Fix `aiClient`'s OpenAI call to use `response_format: { type: 'json_schema', json_schema: ... }` instead of `json_object` + prompt-injected schema.
+- ✅ DONE: Lead RLS reconciled — `workspace_id` is now `required` on Lead and 11 other workspace-scoped entities (BusinessProfile, Campaign, EmailIngestionLog, EmailIngestionSettings, EmailLog, ErrorLog, FollowUpReminder, IdealCustomerProfile, IntentScore, Prospect, ProspectContact, ProspectSignal). RLS read/update/delete remain `created_by`-based for per-user isolation; `workspace_id` is now non-skippable for tenant tagging.
+- ✅ DONE: `aiClient` (`/app/base44/functions/aiClient/entry.ts` and the duplicated copy inside `gmailSync/entry.ts`) now defaults to `gpt-4o-mini` and uses OpenAI's strict `response_format: json_schema` instead of `json_object` + prompt-injected schema.
+- ✅ DONE: `/app/public/manifest.json` created and serves 200 from both local and preview ingress.
+- USER ACTION: Add `https://ce575c72-9c35-4df0-aa04-7bff24f34586.preview.emergentagent.com/oauth/callback` to your Google Cloud OAuth client's authorized redirect URIs so Gmail connect works in this preview.
+- USER ACTION: Push the Base44 entity + function changes (in `/app/base44/`) to your Base44 app so the new RLS rules and AI client take effect server-side.
+- P2: Migrate React Router to v7 (`v7_startTransition`, `v7_relativeSplatPath` flags) to silence the future-flag warnings.

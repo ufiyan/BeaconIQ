@@ -76,7 +76,7 @@
     }
   },
   "required": [
-    "lead_id",
+    "workspace_id","lead_id",
     "reminder_type"
   ],
   "rls": {

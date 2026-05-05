@@ -36,17 +36,26 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 // otherwise falls back to the platform default (base44 InvokeLLM integration).
 
 async function callOpenAI(apiKey, model, prompt, schema) {
-  const userContent = schema
-    ? `${prompt}\n\nRespond with a valid JSON object matching this schema: ${JSON.stringify(schema)}`
-    : prompt;
+  const userContent = prompt;
+  const body = {
+    model,
+    messages: [{ role: 'user', content: userContent }],
+  };
+  if (schema) {
+    // Strict JSON-schema structured output (gpt-4o-* family)
+    body.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'beaconiq_response',
+        schema,
+        strict: false,
+      },
+    };
+  }
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: userContent }],
-      ...(schema ? { response_format: { type: 'json_object' } } : {}),
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`[aiClient/openai] ${res.status}: ${await res.text()}`);
   const data = await res.json();
@@ -85,8 +94,8 @@ function getAIClient(workspace, base44) {
   }
   const provider = workspace.ai_provider || 'openai';
   const apiKey = workspace.ai_api_key;
-  const defaultModels = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022' };
-  const model = workspace.ai_model || defaultModels[provider] || 'gpt-4o';
+  const defaultModels = { openai: 'gpt-4o-mini', anthropic: 'claude-3-5-sonnet-20241022' };
+  const model = workspace.ai_model || defaultModels[provider] || 'gpt-4o-mini';
   console.log(`[gmailSync] Using tenant AI key — provider: ${provider}, model: ${model}`);
   return {
     invokeLLM: (prompt, schema) =>

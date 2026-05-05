@@ -103,7 +103,7 @@
     }
   },
   "required": [
-    "sender_email",
+    "workspace_id","sender_email",
     "result"
   ],
   "rls": {

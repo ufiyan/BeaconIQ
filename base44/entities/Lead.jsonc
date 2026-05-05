@@ -109,6 +109,7 @@
     }
   },
   "required": [
+    "workspace_id",
     "name",
     "email"
   ],

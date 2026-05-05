@@ -1,0 +1,16 @@
+{
+  "name": "BeaconIQ",
+  "short_name": "BeaconIQ",
+  "description": "AI-powered sales CRM for lead management, email outreach, and intent scoring.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F17",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><defs><linearGradient id='g' x1='0' y1='0' x2='40' y2='40' gradientUnits='userSpaceOnUse'><stop offset='0%25' stop-color='%230F1B34'/><stop offset='100%25' stop-color='%23162447'/></linearGradient><linearGradient id='b' x1='10' y1='8' x2='30' y2='32' gradientUnits='userSpaceOnUse'><stop offset='0%25' stop-color='%2360A5FA'/><stop offset='100%25' stop-color='%233B82F6'/></linearGradient></defs><rect width='40' height='40' rx='10' fill='url(%23g)'/><path d='M13 10.5h9.5a5.25 5.25 0 0 1 2.4 9.92 5.75 5.75 0 0 1-2.9 10.58H13V10.5Zm3.4 3.1v6.05h5.9a3.025 3.025 0 0 0 0-6.05h-5.9Zm0 9.1v6.25h6.4a3.125 3.125 0 0 0 0-6.25h-6.4Z' fill='url(%23b)'/><circle cx='29' cy='12' r='2' fill='%23F5B544'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -92,7 +92,7 @@
     }
   },
   "required": [
-    "company_name"
+    "workspace_id","company_name"
   ],
   "rls": {
     "create": true,

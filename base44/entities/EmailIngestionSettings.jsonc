@@ -84,7 +84,9 @@
       "title": "Demo Batch"
     }
   },
-  "required": [],
+  "required": [
+    "workspace_id"
+  ],
   "rls": {
     "create": true,
     "read": {

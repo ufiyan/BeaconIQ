@@ -69,7 +69,7 @@
     }
   },
   "required": [
-    "lead_id",
+    "workspace_id","lead_id",
     "subject",
     "body"
   ],

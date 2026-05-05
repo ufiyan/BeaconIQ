@@ -55,7 +55,7 @@
     }
   },
   "required": [
-    "prospect_id",
+    "workspace_id","prospect_id",
     "signal_type",
     "signal_title"
   ],

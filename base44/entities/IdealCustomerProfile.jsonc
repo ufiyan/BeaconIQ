@@ -63,7 +63,7 @@
     }
   },
   "required": [
-    "name"
+    "workspace_id","name"
   ],
   "rls": {
     "create": true,

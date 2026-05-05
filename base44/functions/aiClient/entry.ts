@@ -9,7 +9,7 @@
  *      tenant's own key and model.
  *   2. Otherwise → fall back to the platform default (base44.integrations.Core.InvokeLLM).
  *
- * Supported providers: "openai" (default model: gpt-4o),
+ * Supported providers: "openai" (default model: gpt-4o-mini),
  *                       "anthropic" (default model: claude-3-5-sonnet-20241022),
  *                       "base44" / anything else → platform default.
  */
@@ -19,9 +19,17 @@ async function callOpenAI(apiKey, model, prompt, responseJsonSchema) {
   const body = { model, messages };
 
   if (responseJsonSchema) {
-    body.response_format = { type: 'json_object' };
-    // Append schema hint to prompt so the model knows the expected shape
-    messages[0].content += `\n\nRespond with a valid JSON object matching this schema: ${JSON.stringify(responseJsonSchema)}`;
+    // Use OpenAI structured outputs (strict JSON-schema mode) when a schema
+    // is provided. This is dramatically more reliable than `json_object` +
+    // prompt-injected schema and is supported on all gpt-4o-* models.
+    body.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'beaconiq_response',
+        schema: responseJsonSchema,
+        strict: false,
+      },
+    };
   }
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -100,10 +108,10 @@ export function getAIClient(workspace, base44) {
   const apiKey = workspace.ai_api_key;
 
   const defaultModels = {
-    openai: 'gpt-4o',
+    openai: 'gpt-4o-mini',
     anthropic: 'claude-3-5-sonnet-20241022',
   };
-  const model = workspace.ai_model || defaultModels[provider] || 'gpt-4o';
+  const model = workspace.ai_model || defaultModels[provider] || 'gpt-4o-mini';
 
   console.log(`[aiClient] Using tenant key — provider: ${provider}, model: ${model}`);
 

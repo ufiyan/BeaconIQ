@@ -50,7 +50,7 @@
     }
   },
   "required": [
-    "prospect_id",
+    "workspace_id","prospect_id",
     "name"
   ],
   "rls": {

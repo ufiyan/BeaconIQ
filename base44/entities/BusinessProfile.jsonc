@@ -98,7 +98,7 @@
     }
   },
   "required": [
-    "business_name",
+    "workspace_id","business_name",
     "description",
     "industry",
     "target_audience",
