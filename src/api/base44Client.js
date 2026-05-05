@@ -3,12 +3,15 @@ import { appParams } from '@/lib/app-params';
 
 const { appId, token, functionsVersion, appBaseUrl } = appParams;
 
-// Public client — auth is handled lazily; the SDK will redirect to login when
-// requiresAuth-protected entities are touched without a valid token.
+// API key is configured at build time and forwarded as a header on every
+// request made by the SDK (it works alongside the user-level access token).
+const apiKey = import.meta.env.VITE_BASE44_API_KEY;
+
 export const base44 = createClient({
   appId,
   token,
   functionsVersion,
   requiresAuth: false,
   appBaseUrl,
+  ...(apiKey ? { headers: { api_key: apiKey } } : {}),
 });
